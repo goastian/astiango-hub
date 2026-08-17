@@ -14,6 +14,11 @@ const login: LViewsLogin = {
   initial: {
     title: '初始用户名/密码',
   },
+  passwordChangeRequired: {
+    title: '修改默认密码',
+    message: '为保障安全，请先设置新密码再继续。',
+    success: '密码已修改，现在可以继续。',
+  },
   documentation: '文档',
   mobile: {
     warning: '您在未优化过的移动端上运行，请使用台式机或笔记本',

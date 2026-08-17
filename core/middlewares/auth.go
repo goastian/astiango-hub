@@ -40,6 +40,14 @@ func AuthorizationMiddleware() gin.HandlerFunc {
 		// set user in context
 		c.Set(constants.UserContextKey, u)
 
+		// The bootstrap account is deliberately constrained until its default
+		// password is replaced. Enforcing this server-side prevents API clients
+		// from bypassing the UI prompt.
+		if u.MustChangePassword && !(c.Request.Method == "POST" && c.Request.URL.Path == "/users/me/change-password") {
+			utils.HandleError(403, c, errors.New("password change required"))
+			return
+		}
+
 		// validation success
 		c.Next()
 	}

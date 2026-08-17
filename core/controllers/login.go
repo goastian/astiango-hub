@@ -1,10 +1,11 @@
 package controllers
 
 import (
+	"github.com/gin-gonic/gin"
 	"github.com/goastian/astiango-hub/core/constants"
 	"github.com/goastian/astiango-hub/core/errors"
 	"github.com/goastian/astiango-hub/core/user"
-	"github.com/gin-gonic/gin"
+	"github.com/goastian/astiango-hub/core/utils"
 )
 
 type PostLoginParams struct {
@@ -12,19 +13,30 @@ type PostLoginParams struct {
 	Password string `json:"password" description:"Password" validate:"required"`
 }
 
-func PostLogin(c *gin.Context, params *PostLoginParams) (response *Response[string], err error) {
+type LoginResponse struct {
+	Token                  string `json:"token"`
+	PasswordChangeRequired bool   `json:"password_change_required"`
+}
+
+func PostLogin(c *gin.Context, params *PostLoginParams) (response *Response[LoginResponse], err error) {
 	userSvc, err := user.GetUserService()
 	if err != nil {
-		return GetErrorResponse[string](err)
+		return GetErrorResponse[LoginResponse](err)
 	}
 
 	token, loggedInUser, err := userSvc.Login(params.Username, params.Password)
 	if err != nil {
-		return GetErrorResponse[string](errors.ErrorUserUnauthorized)
+		// Authentication failures are expected client errors. Returning a 401
+		// avoids representing invalid credentials as a server malfunction.
+		utils.HandleErrorUnauthorized(c, errors.ErrorUserUnauthorized)
+		return nil, nil
 	}
 
 	c.Set(constants.UserContextKey, loggedInUser)
-	return GetDataResponse(token)
+	return GetDataResponse(LoginResponse{
+		Token:                  token,
+		PasswordChangeRequired: loggedInUser.MustChangePassword,
+	})
 }
 
 func PostLogout(_ *gin.Context) (response *VoidResponse, err error) {

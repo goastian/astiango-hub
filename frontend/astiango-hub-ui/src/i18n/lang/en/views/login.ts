@@ -14,6 +14,11 @@ const login: LViewsLogin = {
   initial: {
     title: 'Initial Username/Password',
   },
+  passwordChangeRequired: {
+    title: 'Change default password',
+    message: 'For security, choose a new password before continuing.',
+    success: 'Password changed. You can now continue.',
+  },
   documentation: 'Documentation',
   mobile: {
     warning:

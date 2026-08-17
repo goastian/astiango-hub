@@ -41,11 +41,16 @@ func (svc *Service) init() (err error) {
 	}
 
 	// add user
+	passwordHash, err := utils.HashPassword(constants.DefaultAdminPassword)
+	if err != nil {
+		return err
+	}
 	u = &models.User{
-		Username:  constants.DefaultAdminUsername,
-		Password:  utils.EncryptMd5(constants.DefaultAdminPassword),
-		Role:      constants.RoleAdmin,
-		RootAdmin: true,
+		Username:           constants.DefaultAdminUsername,
+		Password:           passwordHash,
+		MustChangePassword: true,
+		Role:               constants.RoleAdmin,
+		RootAdmin:          true,
 	}
 	u.SetCreatedAt(time.Now())
 	u.SetUpdatedAt(time.Now())
@@ -76,10 +81,15 @@ func (svc *Service) initPro() (err error) {
 	}
 
 	// add user
+	passwordHash, err := utils.HashPassword(constants.DefaultAdminPassword)
+	if err != nil {
+		return err
+	}
 	u = &models.User{
-		Username:  constants.DefaultAdminUsername,
-		Password:  utils.EncryptMd5(constants.DefaultAdminPassword),
-		RootAdmin: true,
+		Username:           constants.DefaultAdminUsername,
+		Password:           passwordHash,
+		MustChangePassword: true,
+		RootAdmin:          true,
 	}
 	u.SetCreatedAt(time.Now())
 	u.SetUpdatedAt(time.Now())
@@ -107,10 +117,14 @@ func (svc *Service) Create(username, password, role, email string, by primitive.
 	}
 
 	// add user
+	passwordHash, err := utils.HashPassword(password)
+	if err != nil {
+		return err
+	}
 	u := models.User{
 		Username: username,
 		Role:     role,
-		Password: utils.EncryptMd5(password),
+		Password: passwordHash,
 		Email:    email,
 	}
 	u.SetCreated(by)
@@ -134,6 +148,12 @@ func (svc *Service) CreateUser(u *models.User, by primitive.ObjectID) (err error
 		return errors.ErrorUserAlreadyExists
 	}
 
+	passwordHash, err := utils.HashPassword(u.Password)
+	if err != nil {
+		return err
+	}
+	u.Password = passwordHash
+
 	// add user
 	u.SetCreated(by)
 	u.SetUpdated(by)
@@ -147,8 +167,25 @@ func (svc *Service) Login(username, password string) (token string, u *models.Us
 	if err != nil {
 		return "", nil, err
 	}
-	if u.Password != utils.EncryptMd5(password) {
+	valid, needsMigration, err := utils.VerifyPassword(password, u.Password)
+	if err != nil || !valid {
 		return "", nil, errors.ErrorUserMismatch
+	}
+	defaultAdminPassword := u.Username == constants.DefaultAdminUsername && password == constants.DefaultAdminPassword
+	if needsMigration || (defaultAdminPassword && !u.MustChangePassword) {
+		if needsMigration {
+			u.Password, err = utils.HashPassword(password)
+			if err != nil {
+				return "", nil, err
+			}
+		}
+		if defaultAdminPassword {
+			u.MustChangePassword = true
+		}
+		u.SetUpdatedAt(time.Now())
+		if err := service.NewModelService[models.User]().ReplaceById(u.Id, *u); err != nil {
+			return "", nil, err
+		}
 	}
 	token, err = svc.makeToken(u)
 	if err != nil {
@@ -166,8 +203,12 @@ func (svc *Service) ChangePassword(id primitive.ObjectID, password string, by pr
 	if err != nil {
 		return err
 	}
-	u.Password = utils.EncryptMd5(password)
-	u.SetCreatedBy(by)
+	u.Password, err = utils.HashPassword(password)
+	if err != nil {
+		return err
+	}
+	u.MustChangePassword = false
+	u.SetUpdated(by)
 	return service.NewModelService[models.User]().ReplaceById(id, *u)
 }
 

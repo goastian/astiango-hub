@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useStore } from 'vuex';
 import { useRoute, useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { User, Lock } from '@element-plus/icons-vue';
 import logo from '@/assets/svg/logo-main.svg?url';
 import useRequest from '@/services/request';
@@ -41,6 +41,11 @@ const loginForm = ref<LoginForm>({
 
 // login form ref
 const loginFormRef = ref();
+
+interface LoginResponse {
+  token: string;
+  password_change_required: boolean;
+}
 
 const validateUsername = (rule: any, value: any, callback: any) => {
   if (!isValidUsername(value)) {
@@ -104,7 +109,7 @@ const login = async () => {
 
   try {
     // perform login request
-    const res = await post<LoginForm, ResponseWithData>('/login', {
+    const res = await post<LoginForm, ResponseWithData<LoginResponse>>('/login', {
       username,
       password,
     });
@@ -116,7 +121,24 @@ const login = async () => {
     }
 
     // set token to local storage
-    localStorage.setItem(LOCAL_STORAGE_KEY_TOKEN, res.data);
+    localStorage.setItem(LOCAL_STORAGE_KEY_TOKEN, res.data.token);
+
+    if (res.data.password_change_required) {
+      const { value } = await ElMessageBox.prompt(
+        t('views.login.passwordChangeRequired.message'),
+        t('views.login.passwordChangeRequired.title'),
+        {
+          closeOnClickModal: false,
+          closeOnPressEscape: false,
+          showClose: false,
+          inputType: 'password',
+          inputValidator: (newPassword: string) =>
+            newPassword.length >= 5 || t('views.login.errors.passwordLength'),
+        }
+      );
+      await store.dispatch('common/changeMyPassword', { password: value });
+      ElMessage.success(t('views.login.passwordChangeRequired.success'));
+    }
 
     // redirect to active tab if exists, otherwise redirect to home
     const activeTab = store.getters['layout/activeTab'] as Tab;
@@ -270,7 +292,6 @@ defineOptions({ name: 'ClLogin' });
         </div>
       </div>
       <div class="tips">
-        <span>{{ t('views.login.initial.title') }}: admin/admin</span>
         <!--TODO: implement github stars-->
         <a
           v-if="false"

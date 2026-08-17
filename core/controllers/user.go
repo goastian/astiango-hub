@@ -155,9 +155,13 @@ func PostUser(c *gin.Context, params *PostUserParams) (response *Response[models
 	if role == "" {
 		role = constants.RoleNormal
 	}
+	passwordHash, err := utils.HashPassword(params.Data.Password)
+	if err != nil {
+		return GetErrorResponse[models.User](err)
+	}
 	model := models.User{
 		Username: params.Data.Username,
-		Password: utils.EncryptMd5(params.Data.Password),
+		Password: passwordHash,
 		Role:     role,
 		RoleId:   roleId,
 		TenantId: tenantId,
@@ -430,8 +434,13 @@ func postUserChangePassword(userId primitive.ObjectID, actor *models.User, passw
 	if err := requireUserManagementAccess(actor, userDb); err != nil {
 		return GetErrorResponse[models.User](err)
 	}
+	passwordHash, err := utils.HashPassword(password)
+	if err != nil {
+		return GetErrorResponse[models.User](err)
+	}
 	userDb.SetUpdated(actor.Id)
-	userDb.Password = utils.EncryptMd5(password)
+	userDb.Password = passwordHash
+	userDb.MustChangePassword = false
 	if err := service.NewModelService[models.User]().ReplaceById(userDb.Id, *userDb); err != nil {
 		return GetErrorResponse[models.User](err)
 	}

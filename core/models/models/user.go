@@ -13,6 +13,7 @@ type User struct {
 	FirstName     string             `json:"first_name" bson:"first_name" description:"First name"`
 	LastName      string             `json:"last_name" bson:"last_name" description:"Last name"`
 	Email         string             `json:"email" bson:"email" description:"Email"`
+	MustChangePassword bool           `json:"must_change_password,omitempty" bson:"must_change_password,omitempty" description:"Password change required"`
 	RootAdmin     bool               `json:"root_admin,omitempty" bson:"root_admin" description:"Root admin"`
 	RootAdminRole bool               `json:"root_admin_role,omitempty" bson:"-"`
 	Routes        []string           `json:"routes,omitempty" bson:"-"`

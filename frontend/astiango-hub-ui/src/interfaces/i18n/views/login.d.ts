@@ -14,6 +14,11 @@ interface LViewsLogin {
   initial: {
     title: string;
   };
+  passwordChangeRequired: {
+    title: string;
+    message: string;
+    success: string;
+  };
   documentation: string;
   mobile: {
     warning: string;

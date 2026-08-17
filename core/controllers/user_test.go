@@ -363,7 +363,10 @@ func TestPostUserMeChangePassword_Success(t *testing.T) {
 	// Verify password was changed
 	updatedUser, err := modelSvc.GetById(id)
 	assert.Nil(t, err)
-	assert.Equal(t, utils.EncryptMd5(password), updatedUser.Password)
+	valid, needsMigration, verifyErr := utils.VerifyPassword(password, updatedUser.Password)
+	require.NoError(t, verifyErr)
+	assert.True(t, valid)
+	assert.False(t, needsMigration)
 
 	// Test invalid password (too short)
 	shortPassword := "123"
@@ -578,7 +581,10 @@ func TestUserAuthorization_EnforcesRoleAndTenantBoundaries(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	updatedMemberA, err = modelSvc.GetById(memberAOtherId)
 	require.NoError(t, err)
-	assert.Equal(t, utils.EncryptMd5("new-password-a"), updatedMemberA.Password)
+	valid, needsMigration, verifyErr := utils.VerifyPassword("new-password-a", updatedMemberA.Password)
+	require.NoError(t, verifyErr)
+	assert.True(t, valid)
+	assert.False(t, needsMigration)
 	w = request(http.MethodPost, "/users/"+memberBId.Hex()+"/change-password", `{"password":"attempted-password-b"}`, adminAToken)
 	assert.Equal(t, http.StatusForbidden, w.Code)
 	updatedMemberB, err := modelSvc.GetById(memberBId)
@@ -602,5 +608,70 @@ func TestUserAuthorization_EnforcesRoleAndTenantBoundaries(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	updatedMemberB, err = modelSvc.GetById(memberBId)
 	require.NoError(t, err)
-	assert.Equal(t, utils.EncryptMd5("root-recovery-password"), updatedMemberB.Password)
+	valid, needsMigration, verifyErr = utils.VerifyPassword("root-recovery-password", updatedMemberB.Password)
+	require.NoError(t, verifyErr)
+	assert.True(t, valid)
+	assert.False(t, needsMigration)
+}
+
+func TestDefaultAdminMustChangePasswordBeforeUsingTheAPI(t *testing.T) {
+	SetupTestDB()
+	defer CleanupTestDB()
+
+	modelSvc := service.NewModelService[models.User]()
+	admin, err := modelSvc.GetById(TestUserId)
+	require.NoError(t, err)
+	admin.Password, err = utils.HashPassword("admin")
+	require.NoError(t, err)
+	admin.MustChangePassword = true
+	require.NoError(t, modelSvc.ReplaceById(admin.Id, *admin))
+
+	router := SetupRouter()
+	router.Use(middlewares.AuthorizationMiddleware())
+	router.GET("/users/me", nil, tonic.Handler(controllers.GetUserMe, 200))
+	router.POST("/users/me/change-password", nil, tonic.Handler(controllers.PostUserMeChangePassword, 200))
+
+	request := func(method, path, body string) *httptest.ResponseRecorder {
+		req, reqErr := http.NewRequest(method, path, strings.NewReader(body))
+		require.NoError(t, reqErr)
+		req.Header.Set("Authorization", TestToken)
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		return w
+	}
+
+	// The bootstrap password can authenticate, but it cannot be used to access
+	// the API until it is replaced.
+	w := request(http.MethodGet, "/users/me", "")
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	w = request(http.MethodPost, "/users/me/change-password", `{"password":"replacement-password"}`)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	w = request(http.MethodGet, "/users/me", "")
+	assert.Equal(t, http.StatusOK, w.Code)
+	updatedAdmin, err := modelSvc.GetById(TestUserId)
+	require.NoError(t, err)
+	assert.False(t, updatedAdmin.MustChangePassword)
+	valid, needsMigration, err := utils.VerifyPassword("replacement-password", updatedAdmin.Password)
+	require.NoError(t, err)
+	assert.True(t, valid)
+	assert.False(t, needsMigration)
+}
+
+func TestPostLoginRejectsInvalidCredentialsWithUnauthorized(t *testing.T) {
+	SetupTestDB()
+	defer CleanupTestDB()
+
+	router := SetupRouter()
+	router.POST("/login", nil, tonic.Handler(controllers.PostLogin, 200))
+
+	req, err := http.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"username":"missing-user","password":"invalid-password"}`))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
