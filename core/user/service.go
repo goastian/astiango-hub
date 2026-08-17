@@ -8,7 +8,6 @@ import (
 	"github.com/goastian/astiango-hub/core/models/models"
 	"github.com/goastian/astiango-hub/core/models/service"
 	"github.com/goastian/astiango-hub/core/utils"
-	"github.com/golang-jwt/jwt/v5"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -17,8 +16,7 @@ import (
 )
 
 type Service struct {
-	jwtSecret        string
-	jwtSigningMethod jwt.SigningMethod
+	jwt *jwtKeyset
 	interfaces.Logger
 }
 
@@ -163,20 +161,28 @@ func (svc *Service) CreateUser(u *models.User, by primitive.ObjectID) (err error
 }
 
 func (svc *Service) Login(username, password string) (token string, u *models.User, err error) {
-	u, err = service.NewModelService[models.User]().GetOne(bson.M{"username": username}, nil)
+	pair, u, err := svc.LoginWithTokens(username, password)
 	if err != nil {
 		return "", nil, err
 	}
+	return pair.AccessToken, u, nil
+}
+
+func (svc *Service) LoginWithTokens(username, password string) (pair *TokenPair, u *models.User, err error) {
+	u, err = service.NewModelService[models.User]().GetOne(bson.M{"username": username}, nil)
+	if err != nil {
+		return nil, nil, err
+	}
 	valid, needsMigration, err := utils.VerifyPassword(password, u.Password)
 	if err != nil || !valid {
-		return "", nil, errors.ErrorUserMismatch
+		return nil, nil, errors.ErrorUserMismatch
 	}
 	defaultAdminPassword := u.Username == constants.DefaultAdminUsername && password == constants.DefaultAdminPassword
 	if needsMigration || (defaultAdminPassword && !u.MustChangePassword) {
 		if needsMigration {
 			u.Password, err = utils.HashPassword(password)
 			if err != nil {
-				return "", nil, err
+				return nil, nil, err
 			}
 		}
 		if defaultAdminPassword {
@@ -184,14 +190,14 @@ func (svc *Service) Login(username, password string) (token string, u *models.Us
 		}
 		u.SetUpdatedAt(time.Now())
 		if err := service.NewModelService[models.User]().ReplaceById(u.Id, *u); err != nil {
-			return "", nil, err
+			return nil, nil, err
 		}
 	}
-	token, err = svc.makeToken(u)
+	pair, err = svc.issueTokenPair(u)
 	if err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
-	return token, u, nil
+	return pair, u, nil
 }
 
 func (svc *Service) CheckToken(tokenStr string) (u *models.User, err error) {
@@ -217,58 +223,45 @@ func (svc *Service) MakeToken(user *models.User) (tokenStr string, err error) {
 }
 
 func (svc *Service) makeToken(user *models.User) (tokenStr string, err error) {
-	token := jwt.NewWithClaims(svc.jwtSigningMethod, jwt.MapClaims{
-		"id":       user.Id,
-		"username": user.Username,
-		"nbf":      time.Now().Unix(),
-	})
-	return token.SignedString([]byte(svc.jwtSecret))
+	tokenStr, _, err = svc.issueToken(user, accessTokenType, svc.jwt.accessTTL)
+	return tokenStr, err
 }
 
 func (svc *Service) checkToken(tokenStr string) (user *models.User, err error) {
-	token, err := jwt.Parse(tokenStr, svc.getSecretFunc())
+	claims, err := svc.parseToken(tokenStr, accessTokenType)
 	if err != nil {
 		return nil, errors2.New("invalid token")
 	}
-
-	claim, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		return nil, errors2.New("invalid type")
-	}
-
-	if !token.Valid {
+	revoked, err := svc.isAccessRevoked(claims.ID)
+	if err != nil || revoked {
 		return nil, errors2.New("invalid token")
 	}
 
-	id, err := primitive.ObjectIDFromHex(claim["id"].(string))
+	id, err := primitive.ObjectIDFromHex(claims.Subject)
 	if err != nil {
 		return nil, errors2.New("invalid token")
 	}
-	username := claim["username"].(string)
 	u, err := service.NewModelService[models.User]().GetById(id)
 	if err != nil {
 		return nil, errors2.New("user not exists")
 	}
 
-	if username != u.Username {
+	if u.Username != claims.Username {
 		return nil, errors2.New("username mismatch")
 	}
 
 	return u, nil
 }
 
-func (svc *Service) getSecretFunc() jwt.Keyfunc {
-	return func(token *jwt.Token) (interface{}, error) {
-		return []byte(svc.jwtSecret), nil
-	}
-}
-
 func newUserService() (svc *Service, err error) {
+	keyset, err := loadJWTKeyset()
+	if err != nil {
+		return nil, err
+	}
 	// service
 	svc = &Service{
-		jwtSecret:        "astiango-hub",
-		jwtSigningMethod: jwt.SigningMethodHS256,
-		Logger:           utils.NewLogger("UserService"),
+		jwt:    keyset,
+		Logger: utils.NewLogger("UserService"),
 	}
 
 	// initialize

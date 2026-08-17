@@ -13,6 +13,11 @@ import {
 } from '@/utils';
 import { getUserFullName } from '@/utils/user';
 import ClIconButton from '@/components/ui/button/IconButton.vue';
+import useRequest from '@/services/request';
+import {
+  LOCAL_STORAGE_KEY_REFRESH_TOKEN,
+  LOCAL_STORAGE_KEY_TOKEN,
+} from '@/constants/localStorage';
 
 // i18n
 const { t, locale } = useI18n();
@@ -41,12 +46,20 @@ const setLang = (lang: Lang) => {
 
 // current user
 const me = computed(() => commonState.me);
+const { post } = useRequest();
 
 // on logout hook
-const onLogout = () => {
+const onLogout = async () => {
+  const refreshToken = localStorage.getItem(LOCAL_STORAGE_KEY_REFRESH_TOKEN);
+  try {
+    await post('/logout', { refresh_token: refreshToken || '' });
+  } catch (_) {
+    // Clear local credentials even if the access token was already expired.
+  }
   setTimeout(() => {
     // clear token
-    localStorage.removeItem('token');
+    localStorage.removeItem(LOCAL_STORAGE_KEY_TOKEN);
+    localStorage.removeItem(LOCAL_STORAGE_KEY_REFRESH_TOKEN);
 
     // clear me
     store.commit('user/resetMe');

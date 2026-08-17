@@ -8,7 +8,10 @@ import logo from '@/assets/svg/logo-main.svg?url';
 import useRequest from '@/services/request';
 import { isValidUsername } from '@/utils/validate';
 import { setGlobalLang, translate } from '@/utils/i18n';
-import { LOCAL_STORAGE_KEY_TOKEN } from '@/constants/localStorage';
+import {
+  LOCAL_STORAGE_KEY_REFRESH_TOKEN,
+  LOCAL_STORAGE_KEY_TOKEN,
+} from '@/constants/localStorage';
 
 const { post } = useRequest();
 
@@ -44,6 +47,7 @@ const loginFormRef = ref();
 
 interface LoginResponse {
   token: string;
+  refresh_token: string;
   password_change_required: boolean;
 }
 
@@ -122,6 +126,10 @@ const login = async () => {
 
     // set token to local storage
     localStorage.setItem(LOCAL_STORAGE_KEY_TOKEN, res.data.token);
+    localStorage.setItem(
+      LOCAL_STORAGE_KEY_REFRESH_TOKEN,
+      res.data.refresh_token
+    );
 
     if (res.data.password_change_required) {
       const { value } = await ElMessageBox.prompt(

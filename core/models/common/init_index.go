@@ -78,4 +78,15 @@ func InitIndexes() {
 	CreateIndexes(mongo.GetMongoCol(service.GetCollectionNameByInstance(models.Token{})), []mongo2.IndexModel{
 		{Keys: bson.D{{Key: "name", Value: 1}}},
 	})
+
+	// JWT security state. Both collections expire automatically after the
+	// corresponding token cannot be used anymore.
+	CreateIndexes(mongo.GetMongoCol(service.GetCollectionNameByInstance(models.JWTRefreshSession{})), []mongo2.IndexModel{
+		{Keys: bson.D{{Key: "jti", Value: 1}}, Options: options.Index().SetUnique(true)},
+		{Keys: bson.D{{Key: "expires_at", Value: 1}}, Options: options.Index().SetExpireAfterSeconds(0)},
+	})
+	CreateIndexes(mongo.GetMongoCol(service.GetCollectionNameByInstance(models.JWTRevocation{})), []mongo2.IndexModel{
+		{Keys: bson.D{{Key: "jti", Value: 1}}, Options: options.Index().SetUnique(true)},
+		{Keys: bson.D{{Key: "expires_at", Value: 1}}, Options: options.Index().SetExpireAfterSeconds(0)},
+	})
 }

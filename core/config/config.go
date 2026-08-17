@@ -6,9 +6,9 @@ import (
 	"sync"
 
 	"github.com/apex/log"
+	"github.com/fsnotify/fsnotify"
 	"github.com/goastian/astiango-hub/core/interfaces"
 	"github.com/goastian/astiango-hub/core/utils"
-	"github.com/fsnotify/fsnotify"
 	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
 )
@@ -76,6 +76,11 @@ func (c *Config) setDefaults() {
 	viper.SetDefault("mongo.username", "")
 	viper.SetDefault("mongo.password", "")
 	viper.SetDefault("mongo.authSource", "admin")
+	viper.SetDefault("jwt.issuer", "astiango-hub")
+	viper.SetDefault("jwt.audience", "astiango-hub-api")
+	viper.SetDefault("jwt.access_ttl", "15m")
+	viper.SetDefault("jwt.refresh_ttl", "168h")
+	viper.SetDefault("jwt.leeway", "30s")
 }
 
 func (c *Config) initLogLevel() {

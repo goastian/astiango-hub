@@ -39,6 +39,7 @@ services:
     environment:
       ASTIANGO_NODE_MASTER: "Y"
       ASTIANGO_MONGO_HOST: "mongo"
+      ASTIANGO_JWT_KEYSET: ${ASTIANGO_JWT_KEYSET:?ASTIANGO_JWT_KEYSET must be injected from a secret manager}
     ports:
       - "${ASTIANGO_PORT:-8082}:8080"
     depends_on:
@@ -51,6 +52,7 @@ services:
     environment:
       ASTIANGO_NODE_MASTER: "N"
       ASTIANGO_MASTER_HOST: "master"
+      ASTIANGO_JWT_KEYSET: ${ASTIANGO_JWT_KEYSET:?ASTIANGO_JWT_KEYSET must be injected from a secret manager}
     depends_on:
       master:
         condition: service_healthy

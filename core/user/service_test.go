@@ -18,8 +18,18 @@ import (
 func setupUserServiceTest(t *testing.T) {
 	t.Helper()
 	viper.Set("mongo.db", "user_service_testdb")
+	configureJWTForTest()
 	mongo.GetMongoDb("user_service_testdb").Drop(context.Background())
 	t.Cleanup(func() { mongo.GetMongoDb("user_service_testdb").Drop(context.Background()) })
+}
+
+func configureJWTForTest() {
+	viper.Set("jwt.keyset", `{"active_kid":"test-2026","keys":{"test-2025":"ZmVkY2JhOTg3NjU0MzIxMGZlZGNiYTk4NzY1NDMyMTA=","test-2026":"MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="}}`)
+	viper.Set("jwt.issuer", "astiango-hub-test")
+	viper.Set("jwt.audience", "astiango-hub-test-api")
+	viper.Set("jwt.access_ttl", "15m")
+	viper.Set("jwt.refresh_ttl", "168h")
+	viper.Set("jwt.leeway", "0s")
 }
 
 func TestLoginMigratesLegacyMD5Password(t *testing.T) {

@@ -47,6 +47,12 @@ var TestUserId primitive.ObjectID
 func SetupTestDB() {
 	viper.Set("mongo.db", "testdb")
 	viper.Set("node.master", true) // Configure as master node for tests
+	viper.Set("jwt.keyset", `{"active_kid":"test-2026","keys":{"test-2025":"ZmVkY2JhOTg3NjU0MzIxMGZlZGNiYTk4NzY1NDMyMTA=","test-2026":"MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="}}`)
+	viper.Set("jwt.issuer", "astiango-hub-test")
+	viper.Set("jwt.audience", "astiango-hub-test-api")
+	viper.Set("jwt.access_ttl", "15m")
+	viper.Set("jwt.refresh_ttl", "168h")
+	viper.Set("jwt.leeway", "0s")
 
 	modelSvc := service.NewModelService[models.User]()
 	u := models.User{

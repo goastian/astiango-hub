@@ -6,6 +6,10 @@ import {
 } from '@/utils/request';
 import { Router } from 'vue-router';
 import { translate } from '@/utils/i18n';
+import {
+  LOCAL_STORAGE_KEY_REFRESH_TOKEN,
+  LOCAL_STORAGE_KEY_TOKEN,
+} from '@/constants/localStorage';
 
 const t = translate;
 
@@ -13,6 +17,41 @@ const t = translate;
 export const initRequest = (router?: Router) => {
   // response interception
   let msgBoxVisible = false;
+  let refreshPromise: Promise<string> | undefined;
+  const clearSession = () => {
+    window.localStorage.removeItem(LOCAL_STORAGE_KEY_TOKEN);
+    window.localStorage.removeItem(LOCAL_STORAGE_KEY_REFRESH_TOKEN);
+  };
+
+  const refreshAccessToken = async (): Promise<string> => {
+    if (refreshPromise) return refreshPromise;
+    const refreshToken = window.localStorage.getItem(LOCAL_STORAGE_KEY_REFRESH_TOKEN);
+    if (!refreshToken) throw new Error('refresh token is missing');
+
+    refreshPromise = axios
+      .post(
+        '/refresh',
+        { refresh_token: refreshToken },
+        { baseURL: getRequestBaseUrl(), _jwtRefreshRequest: true } as AxiosRequestConfig
+      )
+      .then(res => {
+        const pair = res.data?.data;
+        if (!pair?.token || !pair?.refresh_token) {
+          throw new Error('refresh token response is invalid');
+        }
+        window.localStorage.setItem(LOCAL_STORAGE_KEY_TOKEN, pair.token);
+        window.localStorage.setItem(
+          LOCAL_STORAGE_KEY_REFRESH_TOKEN,
+          pair.refresh_token
+        );
+        return pair.token as string;
+      })
+      .finally(() => {
+        refreshPromise = undefined;
+      });
+    return refreshPromise;
+  };
+
   axios.interceptors.response.use(
     res => {
       return res;
@@ -21,9 +60,32 @@ export const initRequest = (router?: Router) => {
       // status code
       const status = err?.response?.status;
 
+      const originalRequest = err.config as AxiosRequestConfig & {
+        _jwtRetried?: boolean;
+        _jwtRefreshRequest?: boolean;
+      };
+      if (
+        status === 401 &&
+        !originalRequest?._jwtRetried &&
+        !originalRequest?._jwtRefreshRequest &&
+        window.localStorage.getItem(LOCAL_STORAGE_KEY_REFRESH_TOKEN)
+      ) {
+        originalRequest._jwtRetried = true;
+        try {
+          const token = await refreshAccessToken();
+          originalRequest.headers = {
+            ...(originalRequest.headers || {}),
+            Authorization: token,
+          };
+          return axios.request(originalRequest);
+        } catch (_) {
+          clearSession();
+        }
+      }
+
       if (status === 401) {
         // 401 error
-        if (window.localStorage.getItem('token')) {
+        if (window.localStorage.getItem(LOCAL_STORAGE_KEY_TOKEN)) {
           // token expired, popup logout warning
           if (msgBoxVisible) return;
           msgBoxVisible = true;
@@ -57,7 +119,7 @@ const useRequest = () => {
     const headers = {} as any;
 
     // add token to headers
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem(LOCAL_STORAGE_KEY_TOKEN);
     if (token) {
       headers['Authorization'] = token;
     }

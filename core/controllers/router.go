@@ -717,6 +717,13 @@ func InitRoutes(app *gin.Engine) (err error) {
 			Description: "Logout",
 			HandlerFunc: PostLogout,
 		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/refresh",
+			Name:        "Refresh Token",
+			Description: "Rotate a refresh token and issue a new token pair",
+			HandlerFunc: PostRefresh,
+		},
 	})
 
 	// Register sync routes that require special authentication
