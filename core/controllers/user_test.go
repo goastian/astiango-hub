@@ -510,3 +510,97 @@ func TestDeleteUserList_Success(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
+
+func TestUserAuthorization_EnforcesRoleAndTenantBoundaries(t *testing.T) {
+	SetupTestDB()
+	defer CleanupTestDB()
+
+	modelSvc := service.NewModelService[models.User]()
+	userSvc, err := user.GetUserService()
+	require.NoError(t, err)
+
+	tenantA := primitive.NewObjectID()
+	tenantB := primitive.NewObjectID()
+	adminA := models.User{Username: "tenant-admin-a", Password: utils.EncryptMd5("admin-password"), Role: "admin", TenantId: tenantA}
+	memberA := models.User{Username: "member-a", Password: utils.EncryptMd5("original-a"), Role: "normal", TenantId: tenantA}
+	memberAOther := models.User{Username: "member-a-other", Password: utils.EncryptMd5("original-a-other"), Role: "normal", TenantId: tenantA}
+	memberB := models.User{Username: "member-b", Password: utils.EncryptMd5("original-b"), Role: "normal", TenantId: tenantB}
+
+	adminAId, err := modelSvc.InsertOne(adminA)
+	require.NoError(t, err)
+	adminA.SetId(adminAId)
+	memberAId, err := modelSvc.InsertOne(memberA)
+	require.NoError(t, err)
+	memberA.SetId(memberAId)
+	memberAOtherId, err := modelSvc.InsertOne(memberAOther)
+	require.NoError(t, err)
+	memberAOther.SetId(memberAOtherId)
+	memberBId, err := modelSvc.InsertOne(memberB)
+	require.NoError(t, err)
+	memberB.SetId(memberBId)
+
+	adminAToken, err := userSvc.MakeToken(&adminA)
+	require.NoError(t, err)
+	memberAToken, err := userSvc.MakeToken(&memberA)
+	require.NoError(t, err)
+
+	router := SetupRouter()
+	router.Use(middlewares.AuthorizationMiddleware())
+	router.GET("/users", nil, tonic.Handler(controllers.GetUserList, 200))
+	router.GET("/users/:id", nil, tonic.Handler(controllers.GetUserById, 200))
+	router.POST("/users", nil, tonic.Handler(controllers.PostUser, 200))
+	router.PATCH("/users/:id", nil, tonic.Handler(controllers.PatchUserById, 200))
+	router.POST("/users/:id/change-password", nil, tonic.Handler(controllers.PostUserChangePassword, 200))
+
+	request := func(method, path, body, token string) *httptest.ResponseRecorder {
+		req, reqErr := http.NewRequest(method, path, strings.NewReader(body))
+		require.NoError(t, reqErr)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		return w
+	}
+
+	// A normal user cannot inspect or change another user, even in its own tenant.
+	w := request(http.MethodGet, "/users/"+memberBId.Hex(), "", memberAToken)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	w = request(http.MethodPost, "/users/"+memberAOtherId.Hex()+"/change-password", `{"password":"attempted-password"}`, memberAToken)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	w = request(http.MethodPatch, "/users/"+memberAOtherId.Hex(), `{"data":{"role":"admin","root_admin":true}}`, memberAToken)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	updatedMemberA, err := modelSvc.GetById(memberAOtherId)
+	require.NoError(t, err)
+	assert.Equal(t, utils.EncryptMd5("original-a-other"), updatedMemberA.Password)
+
+	// A tenant administrator can manage users in the same tenant, but not another tenant.
+	w = request(http.MethodPost, "/users/"+memberAOtherId.Hex()+"/change-password", `{"password":"new-password-a"}`, adminAToken)
+	assert.Equal(t, http.StatusOK, w.Code)
+	updatedMemberA, err = modelSvc.GetById(memberAOtherId)
+	require.NoError(t, err)
+	assert.Equal(t, utils.EncryptMd5("new-password-a"), updatedMemberA.Password)
+	w = request(http.MethodPost, "/users/"+memberBId.Hex()+"/change-password", `{"password":"attempted-password-b"}`, adminAToken)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	updatedMemberB, err := modelSvc.GetById(memberBId)
+	require.NoError(t, err)
+	assert.Equal(t, utils.EncryptMd5("original-b"), updatedMemberB.Password)
+
+	// User-management endpoints reject non-administrators, while tenant admins only see their tenant.
+	w = request(http.MethodGet, "/users", "", memberAToken)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	w = request(http.MethodPost, "/users", `{"data":{"username":"unauthorized","password":"valid-password"}}`, memberAToken)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	w = request(http.MethodGet, "/users", "", adminAToken)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "tenant-admin-a")
+	assert.Contains(t, w.Body.String(), "member-a")
+	assert.Contains(t, w.Body.String(), "member-a-other")
+	assert.NotContains(t, w.Body.String(), "member-b")
+
+	// The platform root administrator remains able to perform cross-tenant recovery.
+	w = request(http.MethodPost, "/users/"+memberBId.Hex()+"/change-password", `{"password":"root-recovery-password"}`, TestToken)
+	assert.Equal(t, http.StatusOK, w.Code)
+	updatedMemberB, err = modelSvc.GetById(memberBId)
+	require.NoError(t, err)
+	assert.Equal(t, utils.EncryptMd5("root-recovery-password"), updatedMemberB.Password)
+}

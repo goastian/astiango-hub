@@ -9,10 +9,10 @@ import (
 
 	"github.com/crawlab-team/fizz"
 
+	"github.com/gin-gonic/gin"
 	"github.com/goastian/astiango-hub/core/middlewares"
 	"github.com/goastian/astiango-hub/core/models/models"
 	"github.com/goastian/astiango-hub/core/openapi"
-	"github.com/gin-gonic/gin"
 )
 
 // RouterGroups defines the different authentication levels for API routes
@@ -521,6 +521,20 @@ func InitRoutes(app *gin.Engine) (err error) {
 			Name:        "Replace User by ID",
 			Description: "Replace a user by ID (full update)",
 			HandlerFunc: PutUserById,
+		},
+		{
+			Method:      http.MethodPatch,
+			Path:        "/:id",
+			Name:        "Patch User by ID",
+			Description: "Disabled to prevent partial privilege updates",
+			HandlerFunc: PatchUserById,
+		},
+		{
+			Method:      http.MethodPatch,
+			Path:        "",
+			Name:        "Patch User List",
+			Description: "Disabled to prevent bulk partial privilege updates",
+			HandlerFunc: PatchUserList,
 		},
 		{
 			Method:      http.MethodPost,

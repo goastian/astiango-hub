@@ -65,6 +65,7 @@ func InitIndexes() {
 		{Keys: bson.D{{Key: "username", Value: 1}}, Options: (&options.IndexOptions{}).SetUnique(true)},
 		{Keys: bson.D{{Key: "role", Value: 1}}},
 		{Keys: bson.D{{Key: "role_id", Value: 1}}},
+		{Keys: bson.D{{Key: "tenant_id", Value: 1}}},
 		{Keys: bson.D{{Key: "email", Value: 1}}},
 	})
 

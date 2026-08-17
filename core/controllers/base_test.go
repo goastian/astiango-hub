@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/crawlab-team/fizz"
 	"github.com/goastian/astiango-hub/core/controllers"
 	"github.com/goastian/astiango-hub/core/entity"
 	"github.com/goastian/astiango-hub/core/middlewares"
@@ -19,7 +20,6 @@ import (
 	"github.com/goastian/astiango-hub/core/models/service"
 	"github.com/goastian/astiango-hub/core/mongo"
 	"github.com/goastian/astiango-hub/core/user"
-	"github.com/crawlab-team/fizz"
 	"github.com/loopfz/gadgeto/tonic"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -47,10 +47,11 @@ var TestUserId primitive.ObjectID
 func SetupTestDB() {
 	viper.Set("mongo.db", "testdb")
 	viper.Set("node.master", true) // Configure as master node for tests
-	
+
 	modelSvc := service.NewModelService[models.User]()
 	u := models.User{
-		Username: "admin",
+		Username:  "admin",
+		RootAdmin: true,
 	}
 	id, err := modelSvc.InsertOne(u)
 	if err != nil {

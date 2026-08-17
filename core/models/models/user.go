@@ -9,6 +9,7 @@ type User struct {
 	Password      string             `json:"-" bson:"password" description:"Password"`
 	Role          string             `json:"role" bson:"role" description:"Role"`
 	RoleId        primitive.ObjectID `json:"role_id" bson:"role_id" description:"Role ID"`
+	TenantId      primitive.ObjectID `json:"tenant_id,omitempty" bson:"tenant_id,omitempty" description:"Tenant ID"`
 	FirstName     string             `json:"first_name" bson:"first_name" description:"First name"`
 	LastName      string             `json:"last_name" bson:"last_name" description:"Last name"`
 	Email         string             `json:"email" bson:"email" description:"Email"`

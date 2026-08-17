@@ -3,28 +3,47 @@ package controllers
 import (
 	"regexp"
 
+	"github.com/goastian/astiango-hub/core/constants"
 	"github.com/goastian/astiango-hub/core/mongo"
 	"github.com/juju/errors"
 
+	"github.com/gin-gonic/gin"
 	"github.com/goastian/astiango-hub/core/models/models"
 	"github.com/goastian/astiango-hub/core/models/service"
 	"github.com/goastian/astiango-hub/core/utils"
-	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	mongo2 "go.mongodb.org/mongo-driver/mongo"
 )
 
-func GetUserById(_ *gin.Context, params *GetByIdParams) (response *Response[models.User], err error) {
+func GetUserById(c *gin.Context, params *GetByIdParams) (response *Response[models.User], err error) {
 	id, err := primitive.ObjectIDFromHex(params.Id)
 	if err != nil {
 		return GetErrorResponse[models.User](errors.BadRequestf("invalid user id: %v", err))
 	}
+	target, err := service.NewModelService[models.User]().GetById(id)
+	if err != nil {
+		return getUserById(id)
+	}
+	if err := requireUserManagementAccess(GetUserFromContext(c), target); err != nil {
+		return GetErrorResponse[models.User](err)
+	}
 	return getUserById(id)
 }
 
-func GetUserList(_ *gin.Context, params *GetListParams) (response *ListResponse[models.User], err error) {
+func GetUserList(c *gin.Context, params *GetListParams) (response *ListResponse[models.User], err error) {
+	actor := GetUserFromContext(c)
+	if err := requireTenantAdministrator(actor); err != nil {
+		return GetErrorListResponse[models.User](err)
+	}
+
 	query := ConvertToBsonMFromListParams(params)
+	if query == nil {
+		query = bson.M{}
+	}
+	if !isRootAdmin(actor) {
+		query["tenant_id"] = actor.TenantId
+	}
 
 	sort, err := GetSortOptionFromString(params.Sort)
 	if err != nil {
@@ -91,11 +110,17 @@ type PostUserParams struct {
 		Password string `json:"password" description:"Password" validate:"required"`
 		Role     string `json:"role" description:"Role"`
 		RoleId   string `json:"role_id" description:"Role ID" format:"objectid" pattern:"^[0-9a-fA-F]{24}$"`
+		TenantId string `json:"tenant_id" description:"Tenant ID" format:"objectid" pattern:"^[0-9a-fA-F]{24}$"`
 		Email    string `json:"email" description:"Email"`
 	} `json:"data" validate:"required"`
 }
 
 func PostUser(c *gin.Context, params *PostUserParams) (response *Response[models.User], err error) {
+	actor := GetUserFromContext(c)
+	if err := requireTenantAdministrator(actor); err != nil {
+		return GetErrorResponse[models.User](err)
+	}
+
 	// Validate email format
 	if params.Data.Email != "" {
 		emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
@@ -115,16 +140,31 @@ func PostUser(c *gin.Context, params *PostUserParams) (response *Response[models
 			return GetErrorResponse[models.User](errors.BadRequestf("role not found: %v", err))
 		}
 	}
-	u := GetUserFromContext(c)
+	tenantId := actor.TenantId
+	if params.Data.TenantId != "" {
+		requestedTenantId, err := primitive.ObjectIDFromHex(params.Data.TenantId)
+		if err != nil {
+			return GetErrorResponse[models.User](errors.BadRequestf("invalid tenant id: %v", err))
+		}
+		if !isRootAdmin(actor) && requestedTenantId != actor.TenantId {
+			return GetErrorResponse[models.User](errors.Forbiddenf("cannot create users outside your tenant"))
+		}
+		tenantId = requestedTenantId
+	}
+	role := params.Data.Role
+	if role == "" {
+		role = constants.RoleNormal
+	}
 	model := models.User{
 		Username: params.Data.Username,
 		Password: utils.EncryptMd5(params.Data.Password),
-		Role:     params.Data.Role,
+		Role:     role,
 		RoleId:   roleId,
+		TenantId: tenantId,
 		Email:    params.Data.Email,
 	}
-	model.SetCreated(u.Id)
-	model.SetUpdated(u.Id)
+	model.SetCreated(actor.Id)
+	model.SetUpdated(actor.Id)
 	id, err := service.NewModelService[models.User]().InsertOne(model)
 	if err != nil {
 		return GetErrorResponse[models.User](err)
@@ -143,7 +183,28 @@ func PutUserById(c *gin.Context, params *PutByIdParams[models.User]) (response *
 	if err != nil {
 		return GetErrorResponse[models.User](errors.BadRequestf("invalid user id: %v", err))
 	}
-	return putUser(id, GetUserFromContext(c).Id, params.Data)
+	actor := GetUserFromContext(c)
+	target, err := service.NewModelService[models.User]().GetById(id)
+	if err != nil {
+		return GetErrorResponse[models.User](err)
+	}
+	if err := requireUserManagementAccess(actor, target); err != nil {
+		return GetErrorResponse[models.User](err)
+	}
+	return putUser(id, actor, params.Data)
+}
+
+// PatchUserById is intentionally disabled. The generic patch controller can
+// modify privilege-bearing fields directly, bypassing the invariants enforced
+// by PutUserById. Use the guarded replacement endpoint instead.
+func PatchUserById(_ *gin.Context, _ *PatchByIdParams[models.User]) (response *Response[models.User], err error) {
+	return GetErrorResponse[models.User](errors.Forbiddenf("user patch endpoint is disabled; use PUT"))
+}
+
+// PatchUserList is intentionally disabled for the same reason as
+// PatchUserById: bulk partial updates are not safe for identity records.
+func PatchUserList(_ *gin.Context, _ *PatchParams) (response *Response[models.User], err error) {
+	return GetErrorResponse[models.User](errors.Forbiddenf("bulk user patch endpoint is disabled"))
 }
 
 type PostUserChangePasswordParams struct {
@@ -156,10 +217,10 @@ func PostUserChangePassword(c *gin.Context, params *PostUserChangePasswordParams
 	if err != nil {
 		return GetErrorResponse[models.User](errors.BadRequestf("invalid user id: %v", err))
 	}
-	return postUserChangePassword(id, GetUserFromContext(c).Id, params.Password)
+	return postUserChangePassword(id, GetUserFromContext(c), params.Password)
 }
 
-func DeleteUserById(_ *gin.Context, params *DeleteByIdParams) (response *Response[models.User], err error) {
+func DeleteUserById(c *gin.Context, params *DeleteByIdParams) (response *Response[models.User], err error) {
 	id, err := primitive.ObjectIDFromHex(params.Id)
 	if err != nil {
 		return GetErrorResponse[models.User](errors.BadRequestf("invalid user id: %v", err))
@@ -167,6 +228,9 @@ func DeleteUserById(_ *gin.Context, params *DeleteByIdParams) (response *Respons
 
 	user, err := service.NewModelService[models.User]().GetById(id)
 	if err != nil {
+		return GetErrorResponse[models.User](err)
+	}
+	if err := requireUserManagementAccess(GetUserFromContext(c), user); err != nil {
 		return GetErrorResponse[models.User](err)
 	}
 	if user.RootAdmin {
@@ -180,7 +244,7 @@ func DeleteUserById(_ *gin.Context, params *DeleteByIdParams) (response *Respons
 	return GetDataResponse(models.User{})
 }
 
-func DeleteUserList(_ *gin.Context, params *DeleteListParams) (response *Response[models.User], err error) {
+func DeleteUserList(c *gin.Context, params *DeleteListParams) (response *Response[models.User], err error) {
 	// Convert string IDs to ObjectIDs
 	var ids []primitive.ObjectID
 	for _, id := range params.Ids {
@@ -189,6 +253,16 @@ func DeleteUserList(_ *gin.Context, params *DeleteListParams) (response *Respons
 			return GetErrorResponse[models.User](errors.BadRequestf("invalid user id: %v", err))
 		}
 		ids = append(ids, objectId)
+	}
+	actor := GetUserFromContext(c)
+	for _, id := range ids {
+		target, err := service.NewModelService[models.User]().GetById(id)
+		if err != nil {
+			return GetErrorResponse[models.User](err)
+		}
+		if err := requireUserManagementAccess(actor, target); err != nil {
+			return GetErrorResponse[models.User](err)
+		}
 	}
 
 	// Check if root admin is in the list
@@ -228,7 +302,7 @@ type PutUserMeParams struct {
 
 func PutUserMe(c *gin.Context, params *PutUserMeParams) (response *Response[models.User], err error) {
 	u := GetUserFromContext(c)
-	return putUser(u.Id, u.Id, params.Data)
+	return putUser(u.Id, u, params.Data)
 }
 
 type PostUserMeChangePasswordParams struct {
@@ -237,7 +311,7 @@ type PostUserMeChangePasswordParams struct {
 
 func PostUserMeChangePassword(c *gin.Context, params *PostUserMeChangePasswordParams) (response *Response[models.User], err error) {
 	u := GetUserFromContext(c)
-	return postUserChangePassword(u.Id, u.Id, params.Password)
+	return postUserChangePassword(u.Id, u, params.Password)
 }
 
 func getUserById(userId primitive.ObjectID) (response *Response[models.User], err error) {
@@ -296,7 +370,7 @@ func getUserByIdWithRoutes(userId primitive.ObjectID) (response *Response[models
 	return GetDataResponse(*user)
 }
 
-func putUser(userId, by primitive.ObjectID, user models.User) (response *Response[models.User], err error) {
+func putUser(userId primitive.ObjectID, actor *models.User, user models.User) (response *Response[models.User], err error) {
 	// model service
 	modelSvc := service.NewModelService[models.User]()
 
@@ -309,17 +383,29 @@ func putUser(userId, by primitive.ObjectID, user models.User) (response *Respons
 		return GetErrorResponse[models.User](err)
 	}
 
+	// Root administrator status is assigned only during bootstrap, never by a
+	// client-controlled update. Non-root administrators cannot move users
+	// across tenants or elevate roles.
+	user.RootAdmin = userDb.RootAdmin
+	if !isRootAdmin(actor) {
+		user.Role = userDb.Role
+		user.RoleId = userDb.RoleId
+		user.TenantId = userDb.TenantId
+	}
+
 	// if root admin, disallow changing username and role
 	if userDb.RootAdmin {
 		user.Username = userDb.Username
 		user.RoleId = userDb.RoleId
+		user.Role = userDb.Role
+		user.TenantId = userDb.TenantId
 	}
 
 	// disallow changing password
 	user.Password = userDb.Password
 
 	// update user
-	user.SetUpdated(by)
+	user.SetUpdated(actor.Id)
 	if user.Id.IsZero() {
 		user.Id = userId
 	}
@@ -331,7 +417,7 @@ func putUser(userId, by primitive.ObjectID, user models.User) (response *Respons
 	return GetDataResponse(user)
 }
 
-func postUserChangePassword(userId, by primitive.ObjectID, password string) (response *Response[models.User], err error) {
+func postUserChangePassword(userId primitive.ObjectID, actor *models.User, password string) (response *Response[models.User], err error) {
 	if len(password) < 5 {
 		return GetErrorResponse[models.User](errors.BadRequestf("password must be at least 5 characters"))
 	}
@@ -341,7 +427,10 @@ func postUserChangePassword(userId, by primitive.ObjectID, password string) (res
 	if err != nil {
 		return GetErrorResponse[models.User](err)
 	}
-	userDb.SetUpdated(by)
+	if err := requireUserManagementAccess(actor, userDb); err != nil {
+		return GetErrorResponse[models.User](err)
+	}
+	userDb.SetUpdated(actor.Id)
 	userDb.Password = utils.EncryptMd5(password)
 	if err := service.NewModelService[models.User]().ReplaceById(userDb.Id, *userDb); err != nil {
 		return GetErrorResponse[models.User](err)
