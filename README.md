@@ -51,8 +51,6 @@ cd frontend/astiango-hub-ui && pnpm install && pnpm run build
 cd ../../../mcp && pnpm install && pnpm run build
 ```
 
-The complete enterprise hardening and modernization roadmap is in [docs/plan-modernizacion-servicio-empresarial.md](docs/plan-modernizacion-servicio-empresarial.md). The naming contract and remaining upstream compatibility dependencies are documented in [docs/rebranding-astiango-hub.md](docs/rebranding-astiango-hub.md).
-
 ## License and responsible use
 
 Keep the original copyright and license notices when redistributing source or binaries. Operators are responsible for complying with applicable law, target-site terms, privacy requirements, rate limits, and `robots.txt` where applicable. See [DISCLAIMER.md](DISCLAIMER.md).
