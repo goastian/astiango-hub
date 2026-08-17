@@ -1,0 +1,173 @@
+name: Publish MCP Package
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'mcp/**'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'mcp/**'
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      publish_tag:
+        description: 'NPM tag to publish under (latest, dev, beta, alpha)'
+        required: false
+        default: 'dev'
+        type: choice
+        options:
+          - latest
+          - dev
+          - beta
+          - alpha
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./mcp
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10.12.1'
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint code
+        run: pnpm run lint
+
+      - name: Run tests
+        run: pnpm run test
+
+      - name: Build package
+        run: pnpm run build
+
+      - name: Determine npm tag
+        id: npm_tag
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            if [[ "${{ github.event.release.prerelease }}" == "true" ]]; then
+              echo "tag=beta" >> $GITHUB_OUTPUT
+            else
+              echo "tag=latest" >> $GITHUB_OUTPUT
+            fi
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.publish_tag }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" = "refs/heads/develop" ]; then
+            echo "tag=dev" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          else
+            echo "tag=dev" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check if package builds correctly
+        run: |
+          if [ ! -f "dist/index.js" ]; then
+            echo "Build failed - dist/index.js not found"
+            exit 1
+          fi
+
+      - name: Check if version already exists on NPM
+        id: version_check
+        run: |
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          
+          echo "Checking if ${PACKAGE_NAME}@${PACKAGE_VERSION} already exists on NPM..."
+          
+          # Check if the version exists on npm
+          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version 2>/dev/null; then
+            echo "Version ${PACKAGE_VERSION} already exists on NPM"
+            echo "should_publish=false" >> $GITHUB_OUTPUT
+            echo "version_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Version ${PACKAGE_VERSION} does not exist on NPM, proceeding with publish"
+            echo "should_publish=true" >> $GITHUB_OUTPUT
+            echo "version_exists=false" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "package_name=${PACKAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "package_version=${PACKAGE_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Skip publish - version already exists
+        if: steps.version_check.outputs.version_exists == 'true'
+        run: |
+          echo "⚠️ Skipping publish: ${{ steps.version_check.outputs.package_name }}@${{ steps.version_check.outputs.package_version }} already exists on NPM"
+          echo "To publish a new version, update the version in package.json first"
+
+      - name: Publish to NPM (dry-run for PRs)
+        if: github.event_name == 'pull_request'
+        run: pnpm publish --dry-run --no-git-checks --tag ${{ steps.npm_tag.outputs.tag }}
+
+      - name: Publish to NPM
+        if: steps.version_check.outputs.should_publish == 'true' && (github.event_name == 'release' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')))
+        run: |
+          echo "Publishing ${{ steps.version_check.outputs.package_name }}@${{ steps.version_check.outputs.package_version }} with tag: ${{ steps.npm_tag.outputs.tag }}"
+          pnpm publish --no-git-checks --tag ${{ steps.npm_tag.outputs.tag }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
+
+      - name: Create GitHub Release Asset
+        if: github.event_name == 'release'
+        run: |
+          tar -czf mcp-server-astiango-hub-${{ github.ref_name }}.tar.gz dist/
+        
+      - name: Upload Release Asset
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./mcp/mcp-server-astiango-hub-${{ github.ref_name }}.tar.gz
+          asset_name: mcp-server-astiango-hub-${{ github.ref_name }}.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Publish Summary
+        if: always()
+        run: |
+          echo "## 📦 Publish Summary"
+          echo "Package: ${{ steps.version_check.outputs.package_name }}"
+          echo "Version: ${{ steps.version_check.outputs.package_version }}"
+          echo "NPM Tag: ${{ steps.npm_tag.outputs.tag }}"
+          
+          if [ "${{ steps.version_check.outputs.should_publish }}" = "true" ]; then
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              echo "✅ Dry-run completed successfully"
+            else
+              echo "✅ Published successfully to NPM"
+            fi
+          else
+            echo "⚠️ Publish skipped - version already exists on NPM"
+            echo "💡 To publish a new version, update the version in package.json"
+          fi

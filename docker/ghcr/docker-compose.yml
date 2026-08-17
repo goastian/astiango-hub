@@ -1,0 +1,24 @@
+services:
+  master:
+    image: ghcr.io/goastian/astiango-hub:${ASTIANGO_TAG:-develop}
+    container_name: astiango_hub_ghcr_master
+    environment:
+      ASTIANGO_NODE_MASTER: "Y"
+      ASTIANGO_MONGO_HOST: "mongo"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mongo
+    
+  worker:
+    image: ghcr.io/goastian/astiango-hub:${ASTIANGO_TAG:-develop}
+    container_name: astiango_hub_ghcr_worker
+    environment:
+      ASTIANGO_NODE_MASTER: "N"
+      ASTIANGO_MASTER_HOST: "master"
+    depends_on:
+      master:
+        condition: service_healthy
+    
+  mongo:
+    image: mongo:5

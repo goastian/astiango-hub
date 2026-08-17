@@ -1,0 +1,13 @@
+services:
+  master:
+    image: goastian/astiango-hub
+    container_name: astiango_hub_master
+    environment:
+      ASTIANGO_NODE_MASTER: "Y"
+      ASTIANGO_MONGO_HOST: "mongo"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mongo
+  mongo:
+    image: mongo:5

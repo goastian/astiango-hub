@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+package grpc;
+option go_package = ".;grpc";
+
+message ModelServiceGetByIdRequest {
+  string node_key = 1;
+  string model_type = 2;
+  string id = 3;
+}
+
+message ModelServiceGetOneRequest {
+  string node_key = 1;
+  string model_type = 2;
+  bytes query = 3;
+  bytes find_options = 4;
+}
+
+message ModelServiceGetManyRequest {
+  string node_key = 1;
+  string model_type = 2;
+  bytes query = 3;
+  bytes find_options = 4;
+}
+
+message ModelServiceDeleteByIdRequest {
+  string node_key = 1;
+  string model_type = 2;
+  string id = 3;
+}
+
+message ModelServiceDeleteOneRequest {
+  string node_key = 1;
+  string model_type = 2;
+  bytes query = 3;
+}
+
+message ModelServiceDeleteManyRequest {
+  string node_key = 1;
+  string model_type = 2;
+  bytes query = 3;
+}
+
+message ModelServiceUpdateByIdRequest {
+  string node_key = 1;
+  string model_type = 2;
+  string id = 3;
+  bytes update = 4;
+}
+
+message ModelServiceUpdateOneRequest {
+  string node_key = 1;
+  string model_type = 2;
+  bytes query = 3;
+  bytes update = 4;
+}
+
+message ModelServiceUpdateManyRequest {
+  string node_key = 1;
+  string model_type = 2;
+  bytes query = 3;
+  bytes update = 4;
+}
+
+message ModelServiceReplaceByIdRequest {
+  string node_key = 1;
+  string model_type = 2;
+  string id = 3;
+  bytes model = 4;
+}
+
+message ModelServiceReplaceOneRequest {
+  string node_key = 1;
+  string model_type = 2;
+  bytes query = 3;
+  bytes model = 4;
+}
+
+message ModelServiceInsertOneRequest {
+  string node_key = 1;
+  string model_type = 2;
+  bytes model = 3;
+}
+
+message ModelServiceInsertManyRequest {
+  string node_key = 1;
+  string model_type = 2;
+  bytes models = 3;
+}
+
+message ModelServiceUpsertOneRequest {
+  string node_key = 1;
+  string model_type = 2;
+  bytes query = 3;
+  bytes model = 4;
+}
+
+message ModelServiceCountRequest {
+  string node_key = 1;
+  string model_type = 2;
+  bytes query = 3;
+}

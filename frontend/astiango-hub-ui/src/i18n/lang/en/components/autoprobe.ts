@@ -1,0 +1,132 @@
+const autoprobe: LComponentsAutoProbe = {
+  form: {
+    name: 'Name',
+    url: 'URL',
+    query: 'Query',
+    queryPlaceholder:
+      'User instruction query to extract data (default to system prompt only)',
+    runOnCreate: 'Run on Create',
+    viewport: 'Viewport',
+    viewports: {
+      pc: {
+        normal: 'PC (Normal)',
+        wide: 'PC (Wide)',
+        small: 'PC (Small)',
+      },
+    },
+    viewportWidth: 'Viewport Width',
+    viewportHeight: 'Viewport Height',
+    viewportPx: 'px',
+  },
+  task: {
+    status: {
+      label: {
+        pending: 'Pending',
+        running: 'Running',
+        completed: 'Completed',
+        failed: 'Failed',
+        cancelled: 'Cancelled',
+        unknown: 'Unknown',
+      },
+      tooltip: {
+        pending: 'The task is waiting to be processed',
+        running: 'The task is currently running',
+        completed: 'The task has been completed successfully',
+        failed: 'The task has failed',
+        cancelled: 'The task has been cancelled',
+        unknown: 'The task status is unknown',
+      },
+    },
+  },
+  stats: {
+    totalFields: 'Total Fields',
+    totalLists: 'Total Lists',
+    paginationType: 'Pagination Type',
+    noPagination: 'No Pagination',
+  },
+  navItems: {
+    lists: 'Lists',
+    fields: 'Fields',
+    pagination: 'Pagination',
+    list: 'List',
+    field: 'Field',
+  },
+  patterns: {
+    selectItem: 'Select an item to view details',
+  },
+  field: {
+    title: 'Field',
+    name: 'Name',
+    selector: 'Selector',
+    type: 'Selector Type',
+    extractionType: 'Extraction Type',
+    attributeName: 'Attribute Name',
+    defaultValue: 'Default Value',
+    notFound: 'Field details not found',
+    self: 'self (points to itself)',
+  },
+  list: {
+    title: 'List',
+    name: 'Name',
+    listSelector: 'List Selector',
+    listSelectorType: 'List Selector Type',
+    itemSelector: 'Item Selector',
+    itemSelectorType: 'Item Selector Type',
+    fields: 'Fields',
+    nestedLists: 'Nested Lists',
+    notFound: 'List details not found',
+    self: 'self (points to itself)',
+  },
+  pagination: {
+    title: 'Pagination',
+    type: 'Type',
+    selectorType: 'Selector Type',
+    selector: 'Selector',
+    maxPages: 'Max Pages',
+    startPage: 'Start Page',
+    notFound: 'Pagination details not found',
+  },
+  pagePattern: {
+    title: 'Page Pattern',
+    type: 'Type',
+    name: 'Name',
+    stats: 'Statistics',
+    fields: 'Fields',
+    lists: 'Lists',
+    hasPagination: 'Has Pagination',
+    notFound: 'Page pattern details not found',
+    fieldCount: 'Fields',
+    types: {
+      field: 'Field',
+      list: 'List',
+      pagination: 'Pagination',
+    },
+    selector: 'Selector',
+    selectorType: 'Selector Type',
+    selectorTypes: {
+      css: 'CSS',
+      xpath: 'XPath',
+      regex: 'Regex',
+    },
+    extractionType: 'Extraction Type',
+    extractionTypes: {
+      text: 'Text',
+      attribute: 'Attribute',
+      html: 'HTML',
+    },
+    attribute: 'Attribute',
+    elementType: 'Element Type',
+    elementTypes: {
+      list: 'List',
+      listItem: 'List Item',
+      field: 'Field',
+      pagination: 'Pagination',
+    },
+    displayConfig: {
+      showLabel: 'Show Label',
+      focusMode: 'Focus Mode',
+    }
+  },
+};
+
+export default autoprobe;

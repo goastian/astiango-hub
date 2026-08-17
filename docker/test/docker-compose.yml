@@ -1,0 +1,62 @@
+services:
+  master:
+    build: .
+    image: goastian/astiango-hub:${ASTIANGO_VERSION:-develop}
+    container_name: astiango_hub_test_master
+    environment:
+      ASTIANGO_NODE_NAME: "Master Node"
+      ASTIANGO_NODE_MASTER: "Y"
+      ASTIANGO_MONGO_HOST: "mongo"
+      ASTIANGO_MONGO_PORT: "27017"
+      ASTIANGO_MONGO_DB: "astiango_hub"
+      ASTIANGO_MONGO_USERNAME: "dev_user"
+      ASTIANGO_MONGO_PASSWORD: "dev_password"
+      ASTIANGO_MONGO_AUTHSOURCE: "admin"
+      ASTIANGO_PPROF: "true"
+      ASTIANGO_LOG_LEVEL: "debug"
+    ports:
+      - "${ASTIANGO_PORT:-8080}:8080"
+      - "${PPROF_PORT:-6060}:6060"
+    depends_on:
+      - mongo
+    env_file:
+      - .env
+
+  worker-01:
+    build: .
+    image: goastian/astiango-hub:${ASTIANGO_VERSION:-develop}
+    container_name: astiango_hub_test_worker_01
+    environment:
+      ASTIANGO_NODE_NAME: "Worker Node 01"
+      ASTIANGO_NODE_MASTER: "N"
+      ASTIANGO_MASTER_HOST: "master"
+    depends_on:
+      master:
+        condition: service_healthy
+    env_file:
+      - .env
+
+  worker-02:
+    build: .
+    image: goastian/astiango-hub:${ASTIANGO_VERSION:-develop}
+    container_name: astiango_hub_test_worker_02
+    environment:
+      ASTIANGO_NODE_NAME: "Worker Node 02"
+      ASTIANGO_NODE_MASTER: "N"
+      ASTIANGO_MASTER_HOST: "master"
+    depends_on:
+      master:
+        condition: service_healthy
+    env_file:
+      - .env
+
+  mongo:
+    image: mongo:5
+    container_name: astiango_hub_test_mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: "dev_user"
+      MONGO_INITDB_ROOT_PASSWORD: "dev_password"
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    env_file:
+      - .env

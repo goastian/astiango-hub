@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package grpc;
+option go_package = ".;grpc";
+
+enum ResponseCode {
+  OK = 0;
+  ERROR = 1;
+}
+
+message Response {
+  ResponseCode code = 1;
+  string message = 2;
+  bytes data = 3;
+  string error = 4;
+  int64 total = 5;
+}

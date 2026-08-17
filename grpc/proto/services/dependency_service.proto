@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+import "entity/response.proto";
+
+package grpc;
+option go_package = ".;grpc";
+
+message Dependency {
+  string name = 1;
+  string version = 2;
+}
+
+message DependencyServiceConnectRequest {
+  string node_key = 1;
+}
+
+enum DependencyServiceCode {
+  SYNC = 0;
+  INSTALL_DEPS = 1;
+  UNINSTALL_DEPS = 2;
+  INSTALL_SETUP = 3;
+  UNINSTALL_SETUP = 4;
+}
+
+message DependencyServiceConnectResponse {
+  DependencyServiceCode code = 1;
+  string lang = 2;
+  string proxy = 3;
+  Dependency dependency = 4;
+  string version = 5;
+}
+
+message DependencyServiceSyncRequest {
+  string node_key = 1;
+  string lang = 2;
+  repeated Dependency dependencies = 3;
+}
+
+message DependencyServiceUpdateLogsRequest {
+  string target_id = 1;
+  repeated string logs = 2;
+}
+
+message DependencyDriver {
+  string name = 1;
+  string version = 2;
+}
+
+message DependencyServiceSyncConfigSetupRequest {
+  string node_key = 1;
+  string lang = 2;
+  string version = 3;
+  string status = 4;
+  string error = 5;
+  repeated DependencyDriver drivers = 6;
+}
+
+service DependencyService {
+  rpc Connect(DependencyServiceConnectRequest) returns (stream DependencyServiceConnectResponse){};
+  rpc Sync(DependencyServiceSyncRequest) returns (Response){};
+  rpc UpdateLogs(stream DependencyServiceUpdateLogsRequest) returns (Response){};
+  rpc SyncConfigSetup(DependencyServiceSyncConfigSetupRequest) returns (Response){};
+}

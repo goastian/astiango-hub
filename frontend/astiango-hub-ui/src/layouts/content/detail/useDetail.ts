@@ -1,0 +1,136 @@
+import { useRoute, useRouter } from 'vue-router';
+import { useStore } from 'vuex';
+import { computed, watch, provide, ref } from 'vue';
+import { ElMessage } from 'element-plus';
+import { getRoutePath, getTabName, isPro, translate } from '@/utils';
+
+// i18n
+const t = translate;
+
+const useDetail = <T extends BaseModel>(ns: ListStoreNamespace) => {
+  const router = useRouter();
+  const route = useRoute();
+
+  // store state
+  const store = useStore();
+  const rootState = store.state as RootStoreState;
+  const state = rootState[ns] as BaseStoreState;
+  const commonState = rootState.common;
+
+  const showActionsToggleTooltip = ref<boolean>(false);
+
+  const activeId = computed<string>(() => {
+    const { id } = route.params;
+    return (id as string) || state.form._id || '';
+  });
+
+  const navItems = computed<NavItem<T>[]>(() => {
+    const items = state.navList.map(item => {
+      return {
+        id: item._id,
+        label: item['name'] || item._id,
+        data: item,
+      };
+    }) as NavItem<T>[];
+    if (!items.some(item => item.id === activeId.value)) {
+      // if activeId is not in navList, add it
+      const { form } = state;
+      items.unshift({
+        id: activeId.value,
+        label: form.name || activeId.value,
+        data: form,
+      });
+    }
+    return items;
+  });
+
+  const activeTabName = computed<string>(() => getTabName(router));
+
+  const tabs = computed(() => {
+    return (
+      state.tabs
+        // filter tabs by allowed routes
+        .filter(tab => {
+          if (!isPro()) return true;
+          if (!commonState.me) return false;
+          if (commonState.me.root_admin) return true;
+          const tabRoute = `${primaryRoutePath.value}/:id/${tab.id}`;
+          return commonState.me.routes?.includes(tabRoute);
+        })
+        .map(tab => {
+          return {
+            ...tab,
+            title: t(tab.title || ''),
+            disabled: state.disabledTabKeys.includes(tab.id),
+          };
+        })
+    );
+  });
+
+  const navLoading = ref(false);
+  const onNavSelect = async (id: string) => {
+    navLoading.value = true;
+    try {
+      await router.push(
+        `${primaryRoutePath.value}/${id}/${activeTabName.value}`
+      );
+      await getForm();
+    } finally {
+      navLoading.value = false;
+    }
+  };
+
+  const primaryRoutePath = computed<string>(() => getRoutePath(route.path));
+
+  const afterSave = computed<Function[]>(() => state.afterSave);
+
+  const getForm = async () => {
+    return await store.dispatch(`${ns}/getById`, activeId.value);
+  };
+
+  const onNavTabsSelect = async (tabName: string) => {
+    await router.push(`${primaryRoutePath.value}/${activeId.value}/${tabName}`);
+  };
+
+  const onBack = async () => {
+    await router.push(`${primaryRoutePath.value}`);
+  };
+
+  const onSave = async () => {
+    if (!activeId.value) {
+      console.error('Active id is empty');
+      return;
+    }
+    await store.dispatch(`${ns}/updateById`, {
+      id: activeId.value,
+      form: state.form,
+    });
+    ElMessage.success(t('common.message.success.save'));
+
+    // after save
+    afterSave.value.map(fn => fn());
+  };
+
+  // store context
+  provide<DetailStoreContext<T>>('store-context', {
+    namespace: ns,
+    store,
+    state,
+  });
+
+  return {
+    navItems,
+    activeId,
+    showActionsToggleTooltip,
+    navLoading,
+    onNavSelect,
+    tabs,
+    activeTabName,
+    getForm,
+    onNavTabsSelect,
+    onBack,
+    onSave,
+  };
+};
+
+export default useDetail;

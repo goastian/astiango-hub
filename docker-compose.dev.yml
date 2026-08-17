@@ -1,0 +1,61 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: goastian/astiango-hub-backend:${ASTIANGO_TAG:-develop}
+    env_file:
+      - .env.local
+
+  frontend:
+    build:
+      context: ./frontend
+    image: goastian/astiango-hub-frontend:${ASTIANGO_TAG:-develop}
+    env_file:
+      - .env.local
+
+  base-image:
+    build:
+      context: ./docker/base-image
+    image: goastian/astiango-hub-base:${ASTIANGO_TAG:-develop}
+    env_file:
+      - .env.local
+
+  astiango-hub:
+    build:
+      context: .
+      args:
+        ASTIANGO_TAG: ${ASTIANGO_TAG:-develop}
+    image: goastian/astiango-hub:${ASTIANGO_TAG:-develop}
+    depends_on:
+      - backend
+      - frontend
+      - base-image
+    env_file:
+      - .env.local
+
+  master:
+    image: goastian/astiango-hub:${ASTIANGO_TAG:-develop}
+    environment:
+      ASTIANGO_NODE_MASTER: "Y"
+      ASTIANGO_MONGO_HOST: "mongo"
+    ports:
+      - "${ASTIANGO_PORT:-8082}:8080"
+    depends_on:
+      - mongo
+    env_file:
+      - .env.local
+
+  worker:
+    image: goastian/astiango-hub:${ASTIANGO_TAG:-develop}
+    environment:
+      ASTIANGO_NODE_MASTER: "N"
+      ASTIANGO_MASTER_HOST: "master"
+    depends_on:
+      master:
+        condition: service_healthy
+    env_file:
+      - .env.local
+
+  mongo:
+    image: mongo:5

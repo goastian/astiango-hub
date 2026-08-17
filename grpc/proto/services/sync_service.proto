@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package grpc;
+option go_package = ".;grpc";
+
+// File synchronization request
+message FileSyncRequest {
+  string spider_id = 1;  // or git_id
+  string path = 2;       // working directory path
+  string node_key = 3;   // worker node key
+}
+
+// File information message (streamable)
+message FileInfo {
+  string name = 1;
+  string path = 2;
+  string full_path = 3;
+  string extension = 4;
+  bool is_dir = 5;
+  int64 file_size = 6;
+  int64 mod_time = 7;  // Unix timestamp
+  uint32 mode = 8;      // File permissions
+  string hash = 9;      // File content hash
+}
+
+// Stream response for file scan
+message FileScanChunk {
+  repeated FileInfo files = 1;  // Batch of files
+  bool is_complete = 2;          // Last chunk indicator
+  string error = 3;              // Error message if any
+  int32 total_files = 4;         // Total file count (in last chunk)
+}
+
+// Download request
+message FileDownloadRequest {
+  string spider_id = 1;
+  string path = 2;
+  string node_key = 3;
+}
+
+// Download response (streamed in chunks)
+message FileDownloadChunk {
+  bytes data = 1;           // File data chunk
+  bool is_complete = 2;     // Last chunk indicator
+  string error = 3;         // Error if any
+  int64 total_bytes = 4;    // Total file size (in first chunk)
+}
+
+service SyncService {
+  // Stream file list for synchronization
+  rpc StreamFileScan(FileSyncRequest) returns (stream FileScanChunk);
+  
+  // Stream file download
+  rpc StreamFileDownload(FileDownloadRequest) returns (stream FileDownloadChunk);
+}

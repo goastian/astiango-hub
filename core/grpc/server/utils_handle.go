@@ -1,0 +1,43 @@
+package server
+
+import (
+	"encoding/json"
+	"github.com/goastian/astiango-hub/core/utils"
+	"github.com/goastian/astiango-hub/grpc"
+	"github.com/goastian/astiango-hub/trace"
+)
+
+func HandleError(err error) (res *grpc.Response, err2 error) {
+	if utils.IsDev() {
+		trace.PrintError(err)
+	}
+	return &grpc.Response{
+		Code:  grpc.ResponseCode_ERROR,
+		Error: err.Error(),
+	}, err
+}
+
+func HandleSuccess() (res *grpc.Response, err error) {
+	return &grpc.Response{
+		Code:    grpc.ResponseCode_OK,
+		Message: "success",
+	}, nil
+}
+
+func HandleSuccessWithData(data interface{}) (res *grpc.Response, err error) {
+	var bytes []byte
+	switch data.(type) {
+	case []byte:
+		bytes = data.([]byte)
+	default:
+		bytes, err = json.Marshal(data)
+		if err != nil {
+			return HandleError(err)
+		}
+	}
+	return &grpc.Response{
+		Code:    grpc.ResponseCode_OK,
+		Message: "success",
+		Data:    bytes,
+	}, nil
+}

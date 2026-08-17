@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="56" viewBox="0 0 260 56" role="img" aria-labelledby="title">
+  <title id="title">AstianGO Hub</title>
+  <rect x="2" y="2" width="52" height="52" rx="14" fill="#2563eb"/>
+  <path d="M14 42 27.7 13h5.8L47 42h-7l-2.9-6.6H24L21 42Zm12.6-12.6h7.9l-4-9.3Z" fill="#fff"/>
+  <text x="68" y="35" fill="#172033" font-family="Inter, system-ui, sans-serif" font-size="24" font-weight="700">AstianGO Hub</text>
+</svg>

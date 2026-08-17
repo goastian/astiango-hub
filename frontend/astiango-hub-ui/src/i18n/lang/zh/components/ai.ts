@@ -1,0 +1,40 @@
+const ai: LComponentsAI = {
+  chatbot: {
+    title: 'AstianGO Hub AI 助手',
+    tooltip: '与 AI 助手聊天',
+    inputPlaceholder: '在这里输入您的问题...',
+    button: 'AI 助手',
+    config: {
+      title: 'AI 助手配置',
+      llmProvider: 'LLM 提供商',
+      systemPrompt: '系统提示词',
+      selectProvider: '选择提供商',
+      enterSystemPrompt: '输入系统提示词以引导 AI...',
+      model: '模型',
+      selectModel: '选择模型',
+      apiKey: 'API 密钥',
+      enterApiKey: '输入您的 API 密钥',
+      temperature: '温度',
+      maxTokens: '最大令牌数',
+    },
+    history: '聊天记录',
+    new: '新聊天',
+    enterHint: '按回车发送，Shift+回车换行',
+    poweredBy: '由 AstianGO Hub AI 提供支持',
+    cancel: '取消',
+    generating: '生成中',
+    searchHistory: '搜索历史',
+    noConversations: '没有聊天记录',
+    newChat: '新聊天',
+    addModel: {
+      label: '添加模型',
+      tooltip: '您还没有配置任何模型。添加一个模型开始聊天',
+    },
+    tokens: '词元数',
+    promptTokens: '输入词元数',
+    completionTokens: '输出词元数',
+    totalTokens: '总词元数',
+  },
+};
+
+export default ai;

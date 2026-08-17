@@ -1,0 +1,45 @@
+export const isChinese = (text: string) => {
+  return /[\u4e00-\u9fa5]/.test(text);
+};
+
+export const isChineseName = (user: User) => {
+  return isChinese((user.first_name || '') + (user.last_name || ''));
+};
+
+export const getUserFullName = (user: User) => {
+  const firstName = user.first_name || '';
+  const lastName = user.last_name || '';
+  if (isChineseName(user)) {
+    return lastName + firstName;
+  } else {
+    return (firstName + ' ' + lastName).trim();
+  }
+};
+
+export const getUserShortName = (user: User) => {
+  // Get first and last name
+  const firstName = user.first_name || '';
+  const lastName = user.last_name || '';
+
+  // Fallback to username if no name provided
+  if (!firstName && !lastName) {
+    if (!user.username) {
+      return 'User'; // Default fallback if no username or name
+    }
+    if (isChinese(user.username)) {
+      return user.username.substring(0, 2);
+    } else {
+      return user.username.substring(0, 2).toUpperCase();
+    }
+  }
+
+  // If Chinese name, return at most 4 characters
+  if (isChineseName(user)) {
+    return getUserFullName(user).slice(0, 4);
+  }
+
+  // Otherwise, return first initial and last initial
+  const firstInitial = firstName ? firstName[0].toUpperCase() : '';
+  const lastInitial = lastName ? lastName[0].toUpperCase() : '';
+  return `${firstInitial}${lastInitial}`;
+};

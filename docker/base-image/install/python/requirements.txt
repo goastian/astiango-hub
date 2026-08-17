@@ -1,0 +1,5 @@
+crawlab-sdk>=0.7.0rc5
+scrapy
+selenium
+bs4
+requests

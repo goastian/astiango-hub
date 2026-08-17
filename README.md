@@ -9,7 +9,7 @@ AstianGO Hub is a distributed platform for operating web crawlers, schedules, wo
 ```yaml
 services:
   master:
-    image: astiango/astiango-hub:latest
+    image: goastian/astiango-hub:latest
     container_name: astiango_hub_master
     environment:
       ASTIANGO_NODE_MASTER: "Y"
@@ -34,11 +34,11 @@ Open `http://localhost:8080`. The inherited development default is `admin/admin`
 | Purpose | Identifier |
 | --- | --- |
 | Product | `AstianGO Hub` |
-| Repository | `github.com/astiango/astiango-hub` |
-| Docker image | `astiango/astiango-hub` |
+| Repository | `github.com/goastian/astiango-hub` |
+| Docker image | `goastian/astiango-hub` |
 | Configuration prefix | `ASTIANGO_` |
 | CLI and server binary | `astiango-hub` / `astiango-hub-server` |
-| MCP package | `@astiango/astiango-hub-mcp` |
+| MCP package | `@goastian/astiango-hub-mcp` |
 | Frontend package | `astiango-hub-ui` |
 
 ## Development

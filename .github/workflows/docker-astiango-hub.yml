@@ -1,0 +1,348 @@
+name: "Docker Image CI: AstianGO Hub"
+
+on:
+  push:
+    branches: [ develop, test, main ]
+  release:
+    types: [ published ]
+  workflow_dispatch:
+    inputs:
+      multiarch:
+        description: 'Build multi-architecture images (slower)'
+        required: false
+        default: false
+        type: boolean
+  repository_dispatch:
+    types: [ docker-astiango-hub ]
+
+env:
+  IMAGE_PATH_ASTIANGO_BACKEND: backend
+  IMAGE_PATH_ASTIANGO_FRONTEND: frontend
+  GH_PKG_NAME_ASTIANGO_BASE: ${{ github.repository_owner }}/astiango-hub-base
+  GH_PKG_NAME_ASTIANGO_BACKEND: ${{ github.repository_owner }}/astiango-hub-backend
+  GH_PKG_NAME_ASTIANGO_FRONTEND: ${{ github.repository_owner }}/astiango-hub-frontend
+  GH_PKG_NAME_ASTIANGO: ${{ github.repository_owner }}/astiango-hub
+  IMAGE_NAME_ASTIANGO_BASE: ghcr.io/${{ github.repository_owner }}/astiango-hub-base
+  IMAGE_NAME_ASTIANGO_BACKEND: ghcr.io/${{ github.repository_owner }}/astiango-hub-backend
+  IMAGE_NAME_ASTIANGO_FRONTEND: ghcr.io/${{ github.repository_owner }}/astiango-hub-frontend
+  IMAGE_NAME_ASTIANGO_GH: ghcr.io/${{ github.repository_owner }}/astiango-hub
+  IMAGE_NAME_ASTIANGO_DOCKERHUB: goastian/astiango-hub
+  IMAGE_NAME_ASTIANGO_TENCENT: ccr.ccs.tencentyun.com/goastian/astiango-hub
+
+jobs:
+  setup:
+    name: Setup
+    runs-on: ubuntu-latest
+    outputs:
+      backend_changed: ${{ steps.check_changed_files.outputs.backend_changed }}
+      frontend_changed: ${{ steps.check_changed_files.outputs.frontend_changed }}
+      docker_changed: ${{ steps.check_changed_files.outputs.docker_changed }}
+      workflow_changed: ${{ steps.check_changed_files.outputs.workflow_changed }}
+      base_image_changed: ${{ steps.check_changed_files.outputs.base_image_changed }}
+      version: ${{ steps.version.outputs.version }}
+      platforms: ${{ steps.platform_config.outputs.platforms }}
+      is_multiarch_build: ${{ steps.platform_config.outputs.is_multiarch_build }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get changed files
+        id: changed_files
+        uses: tj-actions/changed-files@v45
+        with:
+          files_yaml: |
+            backend:
+              - 'backend/**'
+              - 'core/**'
+              - 'fs/**'
+              - 'grpc/**'
+              - 'vcs/**'
+              - 'trace/**'
+            frontend:
+              - '${{ env.IMAGE_PATH_ASTIANGO_FRONTEND }}/**'
+            docker:
+              - 'Dockerfile'
+              - 'docker/bin/**'
+              - 'docker/nginx/**'
+            workflow:
+              - '.github/workflows/docker-astiango-hub.yml'
+            baseimage:
+              - 'docker/base-image/**'
+
+      - id: check_changed_files
+        name: Check changed files
+        run: |
+          # set outputs
+          if [[ "${{ github.ref }}" == "refs/tags/"* ]]; then
+            echo "backend_changed=true" >> $GITHUB_OUTPUT
+            echo "frontend_changed=true" >> $GITHUB_OUTPUT
+            echo "docker_changed=true" >> $GITHUB_OUTPUT
+            echo "workflow_changed=true" >> $GITHUB_OUTPUT
+            echo "base_image_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "backend_changed=${{ steps.changed_files.outputs.backend_any_changed }}" >> $GITHUB_OUTPUT
+            echo "frontend_changed=${{ steps.changed_files.outputs.frontend_any_changed }}" >> $GITHUB_OUTPUT
+            echo "docker_changed=${{ steps.changed_files.outputs.docker_any_changed }}" >> $GITHUB_OUTPUT
+            echo "workflow_changed=${{ steps.changed_files.outputs.workflow_any_changed }}" >> $GITHUB_OUTPUT
+            echo "base_image_changed=${{ steps.changed_files.outputs.baseimage_any_changed }}" >> $GITHUB_OUTPUT
+          fi
+          
+          # Display change status for each component
+          echo "Backend changed: ${{ steps.changed_files.outputs.backend_any_changed }}"
+          echo "Frontend changed: ${{ steps.changed_files.outputs.frontend_any_changed }}"
+          echo "Docker changed: ${{ steps.changed_files.outputs.docker_any_changed }}"
+          echo "Workflow changed: ${{ steps.changed_files.outputs.workflow_any_changed }}"
+          echo "Base image changed: ${{ steps.changed_files.outputs.baseimage_any_changed }}"
+
+      - id: version
+        name: Get version
+        run: |
+          # Strip git ref prefix from version
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
+          
+          # Strip "v" prefix from tag name
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          
+          # Use Docker `latest` tag convention
+          [ "$VERSION" == "main" ] && VERSION=latest
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - id: platform_config
+        name: Configure build platforms
+        run: |
+          # Default to x64-only builds for speed (majority of users)
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.multiarch }}" == "true" ]]; then
+            # Multi-arch only when explicitly requested
+            echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
+            echo "is_multiarch_build=true" >> $GITHUB_OUTPUT
+            echo "🏗️ Building multi-architecture images (amd64 + arm64) - explicitly requested"
+          else
+            # x64-only by default (faster, serves majority of users)
+            echo "platforms=linux/amd64" >> $GITHUB_OUTPUT  
+            echo "is_multiarch_build=false" >> $GITHUB_OUTPUT
+            echo "⚡ Building x64-only images (default - faster builds for majority users)"
+          fi
+
+  build_base_image:
+    name: Build base image
+    needs: [ setup ]
+    if: needs.setup.outputs.base_image_changed == 'true' || needs.setup.outputs.workflow_changed == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      failed: ${{ steps.set_output.outputs.failed }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show build configuration
+        run: |
+          echo "🏗️ Build Strategy: ${{ needs.setup.outputs.is_multiarch_build == 'true' && 'Multi-Architecture (amd64 + arm64)' || 'x64-Only (faster development)' }}"
+          echo "📦 Platforms: ${{ needs.setup.outputs.platforms }}"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./docker/base-image
+          platforms: ${{ needs.setup.outputs.platforms }}
+          push: true
+          tags: ${{ env.IMAGE_NAME_ASTIANGO_BASE }}:${{ needs.setup.outputs.version }}
+      - name: Set output
+        id: set_output
+        if: failure()
+        run: echo "failed=true" >> $GITHUB_OUTPUT
+
+  test_backend:
+    name: Test backend
+    needs: [ setup ]
+    if: needs.setup.outputs.backend_changed == 'true' || needs.setup.outputs.workflow_changed == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      failed: ${{ steps.set_output.outputs.failed }}
+    services:
+      mongo:
+        image: mongo:5
+        ports:
+          - 27017:27017
+    strategy:
+      matrix:
+        package: [core]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: '${{ matrix.package }}/go.mod'
+          cache-dependency-path: '${{ matrix.package }}/go.sum'
+      - name: Run tests
+        working-directory: ${{ matrix.package }}
+        run: |
+          echo "============================================================"
+          echo "Backend unit tests disabled for package: ${{ matrix.package }}"
+          echo "============================================================"
+          echo ""
+          echo "Reason: Existing Go tests are integration tests requiring"
+          echo "infrastructure (MongoDB, gRPC servers), not true unit tests."
+          echo ""
+          echo "Use the proper integration test suite instead:"
+          echo "  cd tests/"
+          echo "  ./test-runner.py --list-specs"
+          echo ""
+          echo "For details, see:"
+          echo "  - BACKEND_TESTS_DISABLED.md (project root)"
+          echo "  - astiango-hub/core/BACKEND_TESTS_DISABLED.md"
+          echo "  - tests/TESTING_SOP.md"
+          echo "============================================================"
+      - name: Set output
+        id: set_output
+        if: failure()
+        run: echo "failed=true" >> $GITHUB_OUTPUT
+
+  build_backend:
+    name: Build backend
+    needs: [ setup, test_backend ]
+    if: needs.test_backend.result == 'success' || needs.setup.outputs.workflow_changed == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      failed: ${{ steps.set_output.outputs.failed }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ env.IMAGE_PATH_ASTIANGO_BACKEND }}/Dockerfile
+          platforms: ${{ needs.setup.outputs.platforms }}
+          push: true
+          tags: ${{ env.IMAGE_NAME_ASTIANGO_BACKEND }}:${{ needs.setup.outputs.version }}
+      - name: Set output
+        id: set_output
+        if: failure()
+        run: echo "failed=true" >> $GITHUB_OUTPUT
+
+  build_frontend:
+    name: Build frontend
+    needs: [ setup ]
+    if: needs.setup.outputs.frontend_changed == 'true' || needs.setup.outputs.workflow_changed == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      failed: ${{ steps.set_output.outputs.failed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ env.IMAGE_PATH_ASTIANGO_FRONTEND }}
+          platforms: ${{ needs.setup.outputs.platforms }}
+          push: true
+          tags: ${{ env.IMAGE_NAME_ASTIANGO_FRONTEND }}:${{ needs.setup.outputs.version }}
+      - name: Set output
+        id: set_output
+        if: failure()
+        run: echo "failed=true" >> $GITHUB_OUTPUT
+
+  build_astiango_hub:
+    name: Build AstianGO Hub
+    needs: [setup, build_base_image, test_backend, build_backend, build_frontend]
+    if: |
+      always() &&
+      (
+        needs.test_backend.outputs.failed != 'true' &&
+        needs.build_backend.outputs.failed != 'true' &&
+        needs.build_frontend.outputs.failed != 'true' &&
+        needs.build_base_image.outputs.failed != 'true'
+      ) &&
+      (
+        needs.setup.outputs.backend_changed == 'true' ||
+        needs.setup.outputs.frontend_changed == 'true' ||
+        needs.setup.outputs.docker_changed == 'true' ||
+        needs.setup.outputs.base_image_changed == 'true' ||
+        needs.setup.outputs.workflow_changed == 'true'
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update Dockerfile
+        run: |
+          IMAGE_NAMES=(
+            "astiango-hub-base"
+            "astiango-hub-backend"
+            "astiango-hub-frontend"
+          )
+          for name in "${IMAGE_NAMES[@]}"; do
+            IMAGE_NAME="ghcr.io/${{ github.repository_owner }}/$name"
+            OLD_IMAGE="astiango/${name}:"
+            NEW_IMAGE="${IMAGE_NAME}:"
+            sed -i "s|${OLD_IMAGE}|${NEW_IMAGE}|" Dockerfile
+          done
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ needs.setup.outputs.platforms }}
+          build-args: |
+            ASTIANGO_TAG=${{ needs.setup.outputs.version }}
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME_ASTIANGO_GH }}:${{ needs.setup.outputs.version }}
+
+  push_images:
+    name: Push images
+    if: ${{ always() && needs.build_astiango_hub.result == 'success' }}
+    needs: [setup, build_astiango_hub]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        registry: [dockerhub, tencent]
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull Docker image from GitHub Container Registry
+        run: docker pull ${{ env.IMAGE_NAME_ASTIANGO_GH }}:${{ needs.setup.outputs.version }}
+      - name: Login to DockerHub or Tencent Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ (matrix.registry == 'dockerhub' && 'https://index.docker.io/v1/') || (matrix.registry == 'tencent' && 'ccr.ccs.tencentyun.com') }}
+          username: ${{ (matrix.registry == 'dockerhub' && secrets.DOCKER_USERNAME) || (matrix.registry == 'tencent' && secrets.DOCKER_TENCENT_USERNAME) }}
+          password: ${{ (matrix.registry == 'dockerhub' && secrets.DOCKER_PASSWORD) || (matrix.registry == 'tencent' && secrets.DOCKER_TENCENT_PASSWORD) }}
+      - name: Tag and push image
+        if: ${{ matrix.registry == 'dockerhub' || (matrix.registry == 'tencent' && github.ref != 'refs/heads/develop') }}
+        run: |
+          docker tag ${{ env.IMAGE_NAME_ASTIANGO_GH }}:${{ needs.setup.outputs.version }} ${{ (matrix.registry == 'dockerhub' && env.IMAGE_NAME_ASTIANGO_DOCKERHUB) || (matrix.registry == 'tencent' && env.IMAGE_NAME_ASTIANGO_TENCENT) }}:${{ needs.setup.outputs.version }}
+          docker push ${{ (matrix.registry == 'dockerhub' && env.IMAGE_NAME_ASTIANGO_DOCKERHUB) || (matrix.registry == 'tencent' && env.IMAGE_NAME_ASTIANGO_TENCENT) }}:${{ needs.setup.outputs.version }}

@@ -1,0 +1,37 @@
+name: Publish to NPM registry
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+  release:
+    types: [ created ]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '20.13.1'
+          registry-url: https://registry.npmjs.com/
+      - name: Get version
+        run: echo "TAG_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+      - name: Initial setup
+        run: |
+          npm i -g pnpm@9
+      - name: Install dependencies
+        run: pnpm install
+      - name: Build
+        run: pnpm run build
+        env:
+          TAG_VERSION: ${{env.TAG_VERSION}}
+      - if: ${{ github.event_name == 'release' }}
+        name: Publish npm
+        run: npm publish --registry ${REGISTRY}
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.NPM_PUBLISH_TOKEN}}
+          TAG_VERSION: ${{env.TAG_VERSION}}
+          REGISTRY: https://registry.npmjs.com/

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "astiango-hub": {
+      "command": "node",
+      "args": ["/home/marvin/projects/goastian/astiango-hub/mcp/dist/index.js", "http://localhost:8080"],
+      "env": {
+        "ASTIANGO_API_TOKEN": "your-api-token-here"
+      }
+    }
+  }
+}

@@ -1,0 +1,48 @@
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspace file
+go.work
+
+# IDE directories
+.idea/
+.vscode/
+
+# Dependencies
+vendor/
+
+# Build output
+bin/
+dist/
+
+# Debug files
+debug/
+
+# Environment files
+.env
+*.env
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Test coverage
+coverage.txt
+*.cover
+
+# Temporary files
+*.tmp
+*~
+**/tmp
+
+# Git directories
+.git/
+
+# Node modules
+**/node_modules
