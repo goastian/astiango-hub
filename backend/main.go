@@ -12,6 +12,9 @@ func init() {
 	if err := user.ValidateJWTConfiguration(); err != nil {
 		panic(err)
 	}
+	if err := utils.ValidateSecurityConfiguration(); err != nil {
+		panic(err)
+	}
 }
 
 func main() {

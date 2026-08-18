@@ -2,18 +2,23 @@ package user
 
 import (
 	errors2 "errors"
+	"fmt"
+	"sync"
+	"time"
+
 	"github.com/goastian/astiango-hub/core/constants"
 	"github.com/goastian/astiango-hub/core/errors"
 	"github.com/goastian/astiango-hub/core/interfaces"
 	"github.com/goastian/astiango-hub/core/models/models"
 	"github.com/goastian/astiango-hub/core/models/service"
 	"github.com/goastian/astiango-hub/core/utils"
+	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"sync"
-	"time"
 )
+
+const minimumBootstrapAdminPasswordLength = 12
 
 type Service struct {
 	jwt *jwtKeyset
@@ -21,30 +26,31 @@ type Service struct {
 }
 
 func (svc *Service) Init() (err error) {
-	if utils.IsPro() {
-		return svc.initPro()
-	}
-	return svc.init()
+	return svc.ensureBootstrapAdmin()
 }
 
-func (svc *Service) init() (err error) {
-	u, err := service.NewModelService[models.User]().GetOne(bson.M{"username": constants.DefaultAdminUsername}, nil)
+func (svc *Service) ensureBootstrapAdmin() (err error) {
+	u, err := service.NewModelService[models.User]().GetOne(bson.M{"root_admin": true}, nil)
 	if err != nil {
 		if !errors2.Is(err, mongo.ErrNoDocuments) {
 			return err
 		}
 	} else {
-		// exists
+		// A root administrator already exists, so bootstrap credentials are not
+		// read or retained by the service.
 		return
 	}
 
-	// add user
-	passwordHash, err := utils.HashPassword(constants.DefaultAdminPassword)
+	username, password, err := loadBootstrapAdminCredentials()
+	if err != nil {
+		return err
+	}
+	passwordHash, err := utils.HashPassword(password)
 	if err != nil {
 		return err
 	}
 	u = &models.User{
-		Username:           constants.DefaultAdminUsername,
+		Username:           username,
 		Password:           passwordHash,
 		MustChangePassword: true,
 		Role:               constants.RoleAdmin,
@@ -56,43 +62,16 @@ func (svc *Service) init() (err error) {
 	return err
 }
 
-func (svc *Service) initPro() (err error) {
-	u, err := service.NewModelService[models.User]().GetOne(bson.M{
-		"$or": []bson.M{
-			{"username": constants.DefaultAdminUsername},
-			{"root_admin": true},
-		},
-	}, nil)
-	if err != nil {
-		if !errors2.Is(err, mongo.ErrNoDocuments) {
-			return err
-		}
-	} else {
-		// exists, compatible with old versions
-		u.RootAdmin = true
-		u.SetUpdatedAt(time.Now())
-		err = service.NewModelService[models.User]().ReplaceById(u.Id, *u)
-		if err != nil {
-			svc.Errorf("failed to update user: %v", err)
-		}
-		return
+func loadBootstrapAdminCredentials() (username, password string, err error) {
+	username = viper.GetString("bootstrap.admin.username")
+	password = viper.GetString("bootstrap.admin.password")
+	if username == "" || password == "" {
+		return "", "", fmt.Errorf("bootstrap administrator is required for an empty installation; inject ASTIANGO_BOOTSTRAP_ADMIN_USERNAME and ASTIANGO_BOOTSTRAP_ADMIN_PASSWORD from a secret manager")
 	}
-
-	// add user
-	passwordHash, err := utils.HashPassword(constants.DefaultAdminPassword)
-	if err != nil {
-		return err
+	if len(password) < minimumBootstrapAdminPasswordLength {
+		return "", "", fmt.Errorf("bootstrap administrator password must be at least %d characters", minimumBootstrapAdminPasswordLength)
 	}
-	u = &models.User{
-		Username:           constants.DefaultAdminUsername,
-		Password:           passwordHash,
-		MustChangePassword: true,
-		RootAdmin:          true,
-	}
-	u.SetCreatedAt(time.Now())
-	u.SetUpdatedAt(time.Now())
-	_, err = service.NewModelService[models.User]().InsertOne(*u)
-	return err
+	return username, password, nil
 }
 
 func (svc *Service) Create(username, password, role, email string, by primitive.ObjectID) (err error) {
@@ -177,16 +156,10 @@ func (svc *Service) LoginWithTokens(username, password string) (pair *TokenPair,
 	if err != nil || !valid {
 		return nil, nil, errors.ErrorUserMismatch
 	}
-	defaultAdminPassword := u.Username == constants.DefaultAdminUsername && password == constants.DefaultAdminPassword
-	if needsMigration || (defaultAdminPassword && !u.MustChangePassword) {
-		if needsMigration {
-			u.Password, err = utils.HashPassword(password)
-			if err != nil {
-				return nil, nil, err
-			}
-		}
-		if defaultAdminPassword {
-			u.MustChangePassword = true
+	if needsMigration {
+		u.Password, err = utils.HashPassword(password)
+		if err != nil {
+			return nil, nil, err
 		}
 		u.SetUpdatedAt(time.Now())
 		if err := service.NewModelService[models.User]().ReplaceById(u.Id, *u); err != nil {

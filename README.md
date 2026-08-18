@@ -14,6 +14,11 @@ services:
     environment:
       ASTIANGO_NODE_MASTER: "Y"
       ASTIANGO_MONGO_HOST: "mongo"
+      ASTIANGO_JWT_KEYSET: ${ASTIANGO_JWT_KEYSET:?inject from a secret manager}
+      ASTIANGO_AUTH_KEY: ${ASTIANGO_AUTH_KEY:?inject from a secret manager}
+      ASTIANGO_ENCRYPTION_KEYSET: ${ASTIANGO_ENCRYPTION_KEYSET:?inject from a secret manager}
+      ASTIANGO_BOOTSTRAP_ADMIN_USERNAME: ${ASTIANGO_BOOTSTRAP_ADMIN_USERNAME:?inject for first start only}
+      ASTIANGO_BOOTSTRAP_ADMIN_PASSWORD: ${ASTIANGO_BOOTSTRAP_ADMIN_PASSWORD:?inject for first start only}
     ports:
       - "8080:8080"
     depends_on:
@@ -27,7 +32,7 @@ services:
 docker compose up -d
 ```
 
-Open `http://localhost:8080`. The inherited development default is `admin/admin`; change it immediately and do not expose the service publicly until the security baseline in the modernization plan is complete.
+Open `http://localhost:8080`. There is no built-in administrator or encryption key. On an empty installation, inject unique bootstrap administrator credentials from your secret manager; after the first successful login and password change, remove the bootstrap credentials from the deployment. See [secret rotation and encryption migration](docs/secret-rotation-and-encryption-migration.md).
 
 ## Canonical identifiers
 

@@ -5,6 +5,11 @@ services:
     environment:
       ASTIANGO_NODE_MASTER: "Y"
       ASTIANGO_MONGO_HOST: "mongo"
+      ASTIANGO_JWT_KEYSET: ${ASTIANGO_JWT_KEYSET:?ASTIANGO_JWT_KEYSET must be injected from a secret manager}
+      ASTIANGO_AUTH_KEY: ${ASTIANGO_AUTH_KEY:?ASTIANGO_AUTH_KEY must be injected from a secret manager}
+      ASTIANGO_ENCRYPTION_KEYSET: ${ASTIANGO_ENCRYPTION_KEYSET:?ASTIANGO_ENCRYPTION_KEYSET must be injected from a secret manager}
+      ASTIANGO_BOOTSTRAP_ADMIN_USERNAME: ${ASTIANGO_BOOTSTRAP_ADMIN_USERNAME:?ASTIANGO_BOOTSTRAP_ADMIN_USERNAME is required for the first start}
+      ASTIANGO_BOOTSTRAP_ADMIN_PASSWORD: ${ASTIANGO_BOOTSTRAP_ADMIN_PASSWORD:?ASTIANGO_BOOTSTRAP_ADMIN_PASSWORD is required for the first start}
     ports:
       - "8080:8080"
     depends_on:

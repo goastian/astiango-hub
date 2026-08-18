@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goastian/astiango-hub/core/constants"
 	"github.com/goastian/astiango-hub/core/models/models"
 	"github.com/goastian/astiango-hub/core/models/service"
 	"github.com/goastian/astiango-hub/core/mongo"
@@ -30,6 +29,33 @@ func configureJWTForTest() {
 	viper.Set("jwt.access_ttl", "15m")
 	viper.Set("jwt.refresh_ttl", "168h")
 	viper.Set("jwt.leeway", "0s")
+	viper.Set("bootstrap.admin.username", "test-bootstrap-admin")
+	viper.Set("bootstrap.admin.password", "test-bootstrap-password")
+}
+
+func TestBootstrapAdminCredentialsRequireInjectedStrongValues(t *testing.T) {
+	previousUsername := viper.Get("bootstrap.admin.username")
+	previousPassword := viper.Get("bootstrap.admin.password")
+	t.Cleanup(func() {
+		viper.Set("bootstrap.admin.username", previousUsername)
+		viper.Set("bootstrap.admin.password", previousPassword)
+	})
+
+	viper.Set("bootstrap.admin.username", "")
+	viper.Set("bootstrap.admin.password", "")
+	_, _, err := loadBootstrapAdminCredentials()
+	require.Error(t, err)
+
+	viper.Set("bootstrap.admin.username", "bootstrap-admin")
+	viper.Set("bootstrap.admin.password", "short")
+	_, _, err = loadBootstrapAdminCredentials()
+	require.Error(t, err)
+
+	viper.Set("bootstrap.admin.password", "unique-bootstrap-password")
+	username, password, err := loadBootstrapAdminCredentials()
+	require.NoError(t, err)
+	require.Equal(t, "bootstrap-admin", username)
+	require.Equal(t, "unique-bootstrap-password", password)
 }
 
 func TestLoginMigratesLegacyMD5Password(t *testing.T) {
@@ -57,22 +83,23 @@ func TestLoginMigratesLegacyMD5Password(t *testing.T) {
 	require.False(t, needsMigration)
 }
 
-func TestLoginRequiresChangingDefaultAdminPasswordEvenWithArgon2id(t *testing.T) {
+func TestLoginPreservesBootstrapPasswordChangeRequirement(t *testing.T) {
 	setupUserServiceTest(t)
 
-	passwordHash, err := utils.HashPassword(constants.DefaultAdminPassword)
+	passwordHash, err := utils.HashPassword("test-bootstrap-password")
 	require.NoError(t, err)
 	modelSvc := service.NewModelService[models.User]()
 	id, err := modelSvc.InsertOne(models.User{
-		Username:  constants.DefaultAdminUsername,
-		Password:  passwordHash,
-		RootAdmin: true,
+		Username:           "test-bootstrap-admin",
+		Password:           passwordHash,
+		RootAdmin:          true,
+		MustChangePassword: true,
 	})
 	require.NoError(t, err)
 
 	svc, err := GetUserService()
 	require.NoError(t, err)
-	_, loggedInUser, err := svc.Login(constants.DefaultAdminUsername, constants.DefaultAdminPassword)
+	_, loggedInUser, err := svc.Login("test-bootstrap-admin", "test-bootstrap-password")
 	require.NoError(t, err)
 	require.True(t, loggedInUser.MustChangePassword)
 

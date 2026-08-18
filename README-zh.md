@@ -27,7 +27,7 @@ services:
 docker compose up -d
 ```
 
-访问 `http://localhost:8080`。继承的开发默认账号为 `admin/admin`；请立即修改密码，并在完成安全基线前避免将服务暴露到公网。
+访问 `http://localhost:8080`。系统没有内置管理员或加密密钥。首次在空安装中启动时，请从密钥管理器注入唯一的引导管理员凭据；首次成功登录并修改密码后，从部署中删除引导凭据。请参阅[密钥轮换和加密迁移](docs/secret-rotation-and-encryption-migration.md)。
 
 ## 标准命名
 

@@ -20,7 +20,6 @@ const (
 	DefaultGrpcPort                   = 9666
 	DefaultGrpcServerHost             = "0.0.0.0"
 	DefaultGrpcServerPort             = 9666
-	DefaultAuthKey                    = "AstianGO Hub2024!"
 	DefaultApiEndpoint                = "http://localhost:8000"
 	DefaultApiAllowOrigin             = "*"
 	DefaultApiAllowCredentials        = "true"
@@ -171,10 +170,7 @@ func GetGrpcServerAddress() string {
 }
 
 func GetAuthKey() string {
-	if res := viper.GetString("auth.key"); res != "" {
-		return res
-	}
-	return DefaultAuthKey
+	return viper.GetString("auth.key")
 }
 
 func GetApiPort() int {

@@ -1,6 +1,7 @@
 package user
 
 import (
+	"encoding/base64"
 	"testing"
 	"time"
 
@@ -11,6 +12,13 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 )
+
+func currentJWTTestKey(t *testing.T) []byte {
+	t.Helper()
+	key, err := base64.StdEncoding.DecodeString("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
+	require.NoError(t, err)
+	return key
+}
 
 func TestJWTConfigurationRejectsMissingAndWeakSecrets(t *testing.T) {
 	configureJWTForTest()
@@ -74,7 +82,7 @@ func TestJWTTokenPairStrictValidationRotationAndRevocation(t *testing.T) {
 	// rejected before its key can be used (algorithm-confusion defense).
 	wrongAlgorithm := jwt.NewWithClaims(jwt.SigningMethodHS384, accessClaims)
 	wrongAlgorithm.Header["kid"] = "test-2026"
-	wrongRaw, err := wrongAlgorithm.SignedString([]byte("0123456789abcdef0123456789abcdef"))
+	wrongRaw, err := wrongAlgorithm.SignedString(currentJWTTestKey(t))
 	require.NoError(t, err)
 	_, err = svc.CheckToken(wrongRaw)
 	require.Error(t, err)
@@ -100,7 +108,7 @@ func TestJWTRejectsRequiredClaimsAndExpiredTokens(t *testing.T) {
 
 	missingClaims := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"sub": "000000000000000000000000"})
 	missingClaims.Header["kid"] = "test-2026"
-	rawMissing, err := missingClaims.SignedString([]byte("0123456789abcdef0123456789abcdef"))
+	rawMissing, err := missingClaims.SignedString(currentJWTTestKey(t))
 	require.NoError(t, err)
 	_, err = svc.CheckToken(rawMissing)
 	require.Error(t, err)
@@ -114,7 +122,7 @@ func TestJWTRejectsRequiredClaimsAndExpiredTokens(t *testing.T) {
 		},
 	})
 	expired.Header["kid"] = "test-2026"
-	rawExpired, err := expired.SignedString([]byte("0123456789abcdef0123456789abcdef"))
+	rawExpired, err := expired.SignedString(currentJWTTestKey(t))
 	require.NoError(t, err)
 	_, err = svc.CheckToken(rawExpired)
 	require.Error(t, err)

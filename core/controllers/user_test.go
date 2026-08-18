@@ -614,14 +614,14 @@ func TestUserAuthorization_EnforcesRoleAndTenantBoundaries(t *testing.T) {
 	assert.False(t, needsMigration)
 }
 
-func TestDefaultAdminMustChangePasswordBeforeUsingTheAPI(t *testing.T) {
+func TestBootstrapAdminMustChangePasswordBeforeUsingTheAPI(t *testing.T) {
 	SetupTestDB()
 	defer CleanupTestDB()
 
 	modelSvc := service.NewModelService[models.User]()
 	admin, err := modelSvc.GetById(TestUserId)
 	require.NoError(t, err)
-	admin.Password, err = utils.HashPassword("admin")
+	admin.Password, err = utils.HashPassword("temporary-bootstrap-password")
 	require.NoError(t, err)
 	admin.MustChangePassword = true
 	require.NoError(t, modelSvc.ReplaceById(admin.Id, *admin))

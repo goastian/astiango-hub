@@ -2,12 +2,12 @@ package middlewares
 
 import (
 	"errors"
+	"github.com/gin-gonic/gin"
 	"github.com/goastian/astiango-hub/core/constants"
 	"github.com/goastian/astiango-hub/core/models/models"
 	"github.com/goastian/astiango-hub/core/models/service"
 	"github.com/goastian/astiango-hub/core/user"
 	"github.com/goastian/astiango-hub/core/utils"
-	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -16,7 +16,7 @@ func AuthorizationMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// disable auth for test
 		if utils.IsAuthDisabled() {
-			u, err := service.NewModelService[models.User]().GetOne(bson.M{"username": constants.DefaultAdminUsername}, nil)
+			u, err := service.NewModelService[models.User]().GetOne(bson.M{"root_admin": true}, nil)
 			if err != nil {
 				utils.HandleErrorInternalServerError(c, err)
 				return
@@ -40,9 +40,9 @@ func AuthorizationMiddleware() gin.HandlerFunc {
 		// set user in context
 		c.Set(constants.UserContextKey, u)
 
-		// The bootstrap account is deliberately constrained until its default
-		// password is replaced. Enforcing this server-side prevents API clients
-		// from bypassing the UI prompt.
+		// The bootstrap account is deliberately constrained until its password is
+		// replaced. Enforcing this server-side prevents API clients from bypassing
+		// the UI prompt.
 		if u.MustChangePassword && !(c.Request.Method == "POST" && c.Request.URL.Path == "/users/me/change-password") {
 			utils.HandleError(403, c, errors.New("password change required"))
 			return
