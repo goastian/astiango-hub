@@ -201,7 +201,7 @@ func (r *Runner) readOutput(reader *bufio.Reader, isStdout bool) {
 			}
 
 			// If not an IPC message or from stderr, treat as log
-			r.writeLogLines([]string{line})
+			r.writeLogLines([]string{r.redactSecrets(line)})
 		}
 	}
 }

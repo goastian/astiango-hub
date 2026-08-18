@@ -1,10 +1,14 @@
 ARG ASTIANGO_TAG=latest
+ARG ASTIANGO_BASE_TAG=sec-009-011
 
 FROM goastian/astiango-hub-backend:${ASTIANGO_TAG} AS backend-build
 
 FROM goastian/astiango-hub-frontend:${ASTIANGO_TAG} AS frontend-build
 
-FROM goastian/astiango-hub-base:${ASTIANGO_TAG}
+FROM goastian/astiango-hub-base:${ASTIANGO_BASE_TAG}
+
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends docker.io && rm -rf /var/lib/apt/lists/*
 
 # Copy files
 COPY --from=backend-build /go/bin/astiango-hub-server /usr/local/bin/astiango-hub-server

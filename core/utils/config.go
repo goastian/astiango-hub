@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/mitchellh/go-homedir"
@@ -21,8 +22,8 @@ const (
 	DefaultGrpcServerHost             = "0.0.0.0"
 	DefaultGrpcServerPort             = 9666
 	DefaultApiEndpoint                = "http://localhost:8000"
-	DefaultApiAllowOrigin             = "*"
-	DefaultApiAllowCredentials        = "true"
+	DefaultApiAllowOrigin             = ""
+	DefaultApiAllowCredentials        = "false"
 	DefaultApiAllowMethods            = "DELETE, POST, OPTIONS, GET, PUT"
 	DefaultApiAllowHeaders            = "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With"
 	DefaultApiPort                    = 8080
@@ -61,6 +62,23 @@ func GetAllowOrigin() string {
 	return DefaultApiAllowOrigin
 }
 
+// GetAllowedOrigins returns the explicit CORS allowlist. An empty value means
+// same-origin only; wildcards are intentionally not supported with credentials.
+func GetAllowedOrigins() []string {
+	raw := GetAllowOrigin()
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	origins := make([]string, 0, len(parts))
+	for _, origin := range parts {
+		if origin = strings.TrimSpace(origin); origin != "" && origin != "*" {
+			origins = append(origins, origin)
+		}
+	}
+	return origins
+}
+
 func GetAllowCredentials() string {
 	if res := viper.GetString("api.allow.credentials"); res != "" {
 		return res
@@ -80,6 +98,20 @@ func GetAllowHeaders() string {
 		return res
 	}
 	return DefaultApiAllowHeaders
+}
+
+func GetAPIRequestBodyLimit() int64 {
+	if res := viper.GetInt64("api.limits.body_bytes"); res > 0 {
+		return res
+	}
+	return 1 << 20 // 1 MiB
+}
+
+func GetAPITimeout() time.Duration {
+	if res := viper.GetDuration("api.timeouts.request"); res > 0 {
+		return res
+	}
+	return 30 * time.Second
 }
 
 func GetGinMode() string {

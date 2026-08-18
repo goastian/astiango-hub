@@ -77,6 +77,7 @@ func GetModelInstances() []any {
 		*new(DependencyConfigSetup),
 		*new(DependencyRepo),
 		*new(Environment),
+		*new(SecretAccessAudit),
 		*new(Git),
 		*new(Metric),
 		*new(Node),

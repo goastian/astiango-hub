@@ -50,8 +50,13 @@ func (app *Api) Start() {
 
 	// http server
 	app.srv = &http.Server{
-		Handler: app.GetHttpServerHandler(),
-		Addr:    address,
+		Handler:           app.GetHttpServerHandler(),
+		Addr:              address,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       utils.GetAPITimeout(),
+		WriteTimeout:      utils.GetAPITimeout(),
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	// listen

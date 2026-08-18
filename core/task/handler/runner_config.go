@@ -2,9 +2,9 @@ package handler
 
 import (
 	"bufio"
-	"fmt"
-	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"syscall"
@@ -13,6 +13,8 @@ import (
 	"github.com/goastian/astiango-hub/core/models/client"
 	"github.com/goastian/astiango-hub/core/models/models"
 	"github.com/goastian/astiango-hub/core/utils"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // configurePythonPath sets up the Python environment paths, handling both pyenv and default installations
@@ -27,9 +29,6 @@ func (r *Runner) configurePythonPath() {
 
 	// Update PATH with pyenv paths
 	currentPath := r.getEnvFromCmd("PATH")
-	if currentPath == "" {
-		currentPath = os.Getenv("PATH")
-	}
 	newPath := pyenvBinPath + ":" + pyenvShimsPath + ":" + currentPath
 	r.setEnvInCmd("PATH", newPath)
 }
@@ -38,9 +37,6 @@ func (r *Runner) configurePythonPath() {
 func (r *Runner) configureNodePath() {
 	// Configure nvm-based Node.js paths
 	currentPath := r.getEnvFromCmd("PATH")
-	if currentPath == "" {
-		currentPath = os.Getenv("PATH")
-	}
 
 	// Configure global node_modules path
 	nodePath := utils.GetNodeModulesPath()
@@ -68,13 +64,14 @@ func (r *Runner) configureGoPath() {
 	}
 }
 
-// configureEnv sets up the environment variables for the task process, including:
-// - Node.js paths
-// - AstianGO Hub-specific variables
-// - Global environment variables from the system
+// configureEnv builds a sterile environment and injects only records whose
+// tenant, project, or task scope matches the current task.
 func (r *Runner) configureEnv() {
-	// Default envs - initialize first so configuration functions can modify them
-	r.cmd.Env = os.Environ()
+	r.cmd = &exec.Cmd{Env: []string{
+		"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+		"HOME=/workspace",
+		"TMPDIR=/tmp",
+	}}
 
 	// Configure Python path
 	r.configurePythonPath()
@@ -85,29 +82,47 @@ func (r *Runner) configureEnv() {
 	// Configure Go path
 	r.configureGoPath()
 
-	// Remove ASTIANGO_ prefixed environment variables
-	for i := 0; i < len(r.cmd.Env); i++ {
-		env := r.cmd.Env[i]
-		if strings.HasPrefix(env, "ASTIANGO_") {
-			r.cmd.Env = append(r.cmd.Env[:i], r.cmd.Env[i+1:]...)
-			i--
-		}
-	}
-
 	// Task-specific environment variables
 	r.cmd.Env = append(r.cmd.Env, "ASTIANGO_TASK_ID="+r.tid.Hex())
 
-	// Global environment variables
-	envs, err := client.NewModelService[models.Environment]().GetMany(nil, nil)
+	filters := []bson.M{{"task_id": r.tid}}
+	if !r.s.ProjectId.IsZero() {
+		filters = append(filters, bson.M{"project_id": r.s.ProjectId})
+	}
+	tenantID := r.taskTenantID()
+	if !tenantID.IsZero() {
+		filters = append(filters, bson.M{"tenant_id": tenantID})
+	}
+	envs, err := client.NewModelService[models.Environment]().GetMany(bson.M{"$or": filters}, nil)
 	if err != nil {
 		r.Errorf("failed to get environments: %v", err)
 	}
+	validKey := regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	for _, env := range envs {
+		if !validKey.MatchString(env.Key) || strings.HasPrefix(env.Key, "ASTIANGO_") {
+			r.Warn("skipping invalid scoped environment key")
+			continue
+		}
 		r.cmd.Env = append(r.cmd.Env, env.Key+"="+env.Value)
+		r.secretValues = append(r.secretValues, env.Value)
+		if _, auditErr := client.NewModelService[models.SecretAccessAudit]().InsertOne(models.SecretAccessAudit{
+			TaskId: r.tid, ProjectId: r.s.ProjectId, TenantId: tenantID, Key: env.Key,
+		}); auditErr != nil {
+			r.Errorf("failed to audit scoped secret access: %v", auditErr)
+		}
 	}
+	r.taskEnv = append([]string(nil), r.cmd.Env...)
+}
 
-	// Add environment variable for child processes to identify they're running under AstianGO Hub
-	r.cmd.Env = append(r.cmd.Env, "ASTIANGO_PARENT_PID="+fmt.Sprint(os.Getpid()))
+func (r *Runner) taskTenantID() primitive.ObjectID {
+	if r.t == nil || r.t.CreatedBy.IsZero() {
+		return primitive.NilObjectID
+	}
+	u, err := client.NewModelService[models.User]().GetById(r.t.CreatedBy)
+	if err != nil || u == nil {
+		return primitive.NilObjectID
+	}
+	return u.TenantId
 }
 
 // configureCwd sets the working directory for the task based on the spider's configuration
@@ -141,15 +156,13 @@ func (r *Runner) configureCmd() (err error) {
 		cmdStr += " " + r.s.Param
 	}
 
-	// get cmd instance
-	r.cmd, err = utils.BuildCmd(cmdStr)
+	// Build a named ephemeral Docker job. Host execution is deliberately not an
+	// option for crawler commands.
+	r.cmd, r.sandboxName, err = utils.BuildSandboxedTaskCommand(r.ctx, r.tid.Hex(), r.cwd, r.taskEnv, cmdStr)
 	if err != nil {
 		r.Errorf("error building command: %v", err)
 		return err
 	}
-
-	// set working directory
-	r.cmd.Dir = r.cwd
 
 	// ZOMBIE PREVENTION: Set process group to enable proper cleanup of child processes
 	if runtime.GOOS != "windows" {

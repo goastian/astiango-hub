@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/goastian/astiango-hub/grpc"
@@ -11,6 +12,9 @@ import (
 // writeLogLines marshals log lines to JSON and sends them to the task service
 // Uses connection-safe approach for robust task execution
 func (r *Runner) writeLogLines(lines []string) {
+	for i, line := range lines {
+		lines[i] = r.redactSecrets(line)
+	}
 	// Check if context is cancelled or connection is closed
 	select {
 	case <-r.ctx.Done():
@@ -72,6 +76,7 @@ func (r *Runner) writeLogLines(lines []string) {
 
 // logInternally sends internal runner logs to the same logging system as the task
 func (r *Runner) logInternally(level string, message string) {
+	message = r.redactSecrets(message)
 	// Format the internal log with a prefix
 	timestamp := time.Now().Local().Format("2006-01-02 15:04:05")
 
@@ -104,6 +109,15 @@ func (r *Runner) logInternally(level string, message string) {
 	case "DEBUG":
 		r.Logger.Debug(message)
 	}
+}
+
+func (r *Runner) redactSecrets(value string) string {
+	for _, secret := range r.secretValues {
+		if secret != "" {
+			value = strings.ReplaceAll(value, secret, "[REDACTED]")
+		}
+	}
+	return value
 }
 
 func (r *Runner) Error(message string) {

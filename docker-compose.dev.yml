@@ -42,10 +42,15 @@ services:
       ASTIANGO_JWT_KEYSET: ${ASTIANGO_JWT_KEYSET:?ASTIANGO_JWT_KEYSET must be injected from a secret manager}
       ASTIANGO_AUTH_KEY: ${ASTIANGO_AUTH_KEY:?ASTIANGO_AUTH_KEY must be injected from a secret manager}
       ASTIANGO_ENCRYPTION_KEYSET: ${ASTIANGO_ENCRYPTION_KEYSET:?ASTIANGO_ENCRYPTION_KEYSET must be injected from a secret manager}
+      ASTIANGO_TASK_SANDBOX_WORKSPACE_HOST: ${ASTIANGO_TASK_SANDBOX_WORKSPACE_HOST:?must be the Docker-host path for the shared workspace}
+      ASTIANGO_WORKSPACE: /workspace
       ASTIANGO_BOOTSTRAP_ADMIN_USERNAME: ${ASTIANGO_BOOTSTRAP_ADMIN_USERNAME:?ASTIANGO_BOOTSTRAP_ADMIN_USERNAME is required for the first start}
       ASTIANGO_BOOTSTRAP_ADMIN_PASSWORD: ${ASTIANGO_BOOTSTRAP_ADMIN_PASSWORD:?ASTIANGO_BOOTSTRAP_ADMIN_PASSWORD is required for the first start}
     ports:
       - "${ASTIANGO_PORT:-8082}:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${ASTIANGO_TASK_SANDBOX_WORKSPACE_HOST:?must be the Docker-host path for the shared workspace}:/workspace
     depends_on:
       - mongo
     env_file:
@@ -59,9 +64,14 @@ services:
       ASTIANGO_JWT_KEYSET: ${ASTIANGO_JWT_KEYSET:?ASTIANGO_JWT_KEYSET must be injected from a secret manager}
       ASTIANGO_AUTH_KEY: ${ASTIANGO_AUTH_KEY:?ASTIANGO_AUTH_KEY must be injected from a secret manager}
       ASTIANGO_ENCRYPTION_KEYSET: ${ASTIANGO_ENCRYPTION_KEYSET:?ASTIANGO_ENCRYPTION_KEYSET must be injected from a secret manager}
+      ASTIANGO_TASK_SANDBOX_WORKSPACE_HOST: ${ASTIANGO_TASK_SANDBOX_WORKSPACE_HOST:?must be the Docker-host path for the shared workspace}
+      ASTIANGO_WORKSPACE: /workspace
     depends_on:
       master:
         condition: service_healthy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${ASTIANGO_TASK_SANDBOX_WORKSPACE_HOST:?must be the Docker-host path for the shared workspace}:/workspace
     env_file:
       - .env.local
 

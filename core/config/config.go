@@ -81,6 +81,19 @@ func (c *Config) setDefaults() {
 	viper.SetDefault("jwt.access_ttl", "15m")
 	viper.SetDefault("jwt.refresh_ttl", "168h")
 	viper.SetDefault("jwt.leeway", "30s")
+	viper.SetDefault("api.allow.origin", "")
+	viper.SetDefault("api.allow.credentials", "false")
+	viper.SetDefault("api.limits.body_bytes", 1<<20)
+	viper.SetDefault("api.timeouts.request", "30s")
+	viper.SetDefault("task.sandbox.image", "goastian/astiango-hub-base:sec-009-011")
+	viper.SetDefault("task.sandbox.user", "1000:1000")
+	viper.SetDefault("task.sandbox.network", "none")
+	viper.SetDefault("task.sandbox.cpus", "1")
+	viper.SetDefault("task.sandbox.memory", "512m")
+	viper.SetDefault("task.sandbox.pids", 128)
+	viper.SetDefault("task.sandbox.disk", "1g")
+	viper.SetDefault("task.sandbox.timeout", "30m")
+	viper.SetDefault("task.sandbox.tmpfs_size", "64m")
 }
 
 func (c *Config) initLogLevel() {

@@ -159,6 +159,9 @@ type Runner struct {
 	statusCache      *TaskStatusCache     // local status cache that survives disconnections
 	pendingUpdates   []TaskStatusSnapshot // status updates to sync when reconnected
 	statusCacheMutex sync.RWMutex         // mutex for status cache operations
+	taskEnv          []string
+	secretValues     []string
+	sandboxName      string
 }
 
 // Init initializes the task runner by updating the task status and establishing gRPC connections
@@ -200,19 +203,14 @@ func (r *Runner) Run() (err error) {
 		}
 	}
 
-	// install dependencies
-	if err := r.installDependenciesIfAvailable(); err != nil {
-		r.Warnf("error installing dependencies: %v", err)
-	}
+	// configure environment variables
+	r.configureEnv()
 
 	// configure cmd
 	err = r.configureCmd()
 	if err != nil {
 		return r.updateTask(constants.TaskStatusError, err)
 	}
-
-	// configure environment variables
-	r.configureEnv()
 
 	// start process
 	if err := r.cmd.Start(); err != nil {
@@ -240,6 +238,7 @@ func (r *Runner) Run() (err error) {
 
 	// Ensure cleanup when Run() exits
 	defer func() {
+		utils.RemoveSandbox(r.sandboxName)
 		// 1. Signal all goroutines to stop
 		r.cancel()
 
@@ -313,6 +312,7 @@ func (r *Runner) Cancel(force bool) (err error) {
 
 	// Wait a moment for background goroutines to respond to cancellation signal
 	time.Sleep(100 * time.Millisecond)
+	utils.StopSandbox(r.sandboxName, force)
 
 	// If force is not requested, try graceful termination first
 	if !force {
