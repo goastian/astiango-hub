@@ -7,6 +7,13 @@ import { visualizer } from 'rollup-plugin-visualizer';
 
 export default defineConfig(({ mode }) => {
   const config: UserConfig = {
+    define: {
+      // Compile vue-i18n messages to ASTs instead of generating functions with
+      // `new Function()`, which is incompatible with the production CSP.
+      __INTLIFY_JIT_COMPILATION__: true,
+      __INTLIFY_DROP_MESSAGE_COMPILER__: false,
+      __INTLIFY_PROD_DEVTOOLS__: false,
+    },
     build: {
       rollupOptions: {
         output: {
