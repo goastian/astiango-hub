@@ -21,7 +21,7 @@ func (svc *Service) Init() (err error) {
 	// check config directory path
 	configDirPath := filepath.Dir(metadataConfigPath)
 	if !utils.Exists(configDirPath) {
-		if err := os.MkdirAll(configDirPath, os.FileMode(0766)); err != nil {
+		if err := os.MkdirAll(configDirPath, os.FileMode(0700)); err != nil {
 			svc.Errorf("create config directory error: %v", err)
 			return err
 		}
@@ -35,7 +35,7 @@ func (svc *Service) Init() (err error) {
 			svc.Errorf("marshal config error: %v", err)
 			return err
 		}
-		if err := os.WriteFile(metadataConfigPath, data, os.FileMode(0766)); err != nil {
+		if err := os.WriteFile(metadataConfigPath, data, os.FileMode(0600)); err != nil {
 			svc.Errorf("write config file error: %v", err)
 			return err
 		}
@@ -48,6 +48,20 @@ func (svc *Service) Init() (err error) {
 		}
 		if err := json.Unmarshal(data, svc.cfg); err != nil {
 			svc.Errorf("unmarshal config error: %v", err)
+			return err
+		}
+	}
+	if svc.cfg.AuthKey == "" {
+		secret, err := utils.NewSecret()
+		if err != nil {
+			return err
+		}
+		svc.cfg.AuthKey = secret
+		data, err := json.Marshal(svc.cfg)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(metadataConfigPath, data, os.FileMode(0600)); err != nil {
 			return err
 		}
 	}

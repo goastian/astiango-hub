@@ -20,12 +20,10 @@ type Service struct {
 }
 
 func (svc *Service) List(path string) (files []entity.FsFileInfo, err error) {
-	// Normalize the provided path
-	normPath := filepath.Clean(path)
-	if normPath == "." {
-		normPath = ""
+	fullPath, err := utils.ResolvePathWithinRoot(svc.rootPath, path)
+	if err != nil {
+		return nil, err
 	}
-	fullPath := filepath.Join(svc.rootPath, normPath)
 
 	// Temporary map to hold directory information and their children
 	dirMap := make(map[string]*entity.FsFileInfo)
@@ -83,11 +81,19 @@ func (svc *Service) List(path string) (files []entity.FsFileInfo, err error) {
 }
 
 func (svc *Service) GetFile(path string) (data []byte, err error) {
-	return os.ReadFile(filepath.Join(svc.rootPath, path))
+	fullPath, err := utils.ResolvePathWithinRoot(svc.rootPath, path)
+	if err != nil {
+		return nil, err
+	}
+	return os.ReadFile(fullPath)
 }
 
 func (svc *Service) GetFileInfo(path string) (file *entity.FsFileInfo, err error) {
-	f, err := os.Stat(filepath.Join(svc.rootPath, path))
+	fullPath, err := utils.ResolvePathWithinRoot(svc.rootPath, path)
+	if err != nil {
+		return nil, err
+	}
+	f, err := os.Stat(fullPath)
 	if err != nil {
 		svc.Errorf("failed to get file info: %v", err)
 		return nil, err
@@ -95,7 +101,7 @@ func (svc *Service) GetFileInfo(path string) (file *entity.FsFileInfo, err error
 	return &entity.FsFileInfo{
 		Name:      f.Name(),
 		Path:      path,
-		FullPath:  filepath.Join(svc.rootPath, path),
+		FullPath:  fullPath,
 		Extension: filepath.Ext(path),
 		IsDir:     f.IsDir(),
 		FileSize:  f.Size(),
@@ -107,7 +113,11 @@ func (svc *Service) GetFileInfo(path string) (file *entity.FsFileInfo, err error
 
 func (svc *Service) Save(path string, data []byte) (err error) {
 	// Create directories if not exist
-	dir := filepath.Dir(filepath.Join(svc.rootPath, path))
+	fullPath, err := utils.ResolvePathWithinRoot(svc.rootPath, path)
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(fullPath)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			svc.Errorf("failed to create directory: %v", err)
@@ -116,27 +126,46 @@ func (svc *Service) Save(path string, data []byte) (err error) {
 	}
 
 	// Write file
-	return os.WriteFile(filepath.Join(svc.rootPath, path), data, 0644)
+	return os.WriteFile(fullPath, data, 0644)
 }
 
 func (svc *Service) CreateDir(path string) (err error) {
-	return os.MkdirAll(filepath.Join(svc.rootPath, path), 0755)
+	fullPath, err := utils.ResolvePathWithinRoot(svc.rootPath, path)
+	if err != nil {
+		return err
+	}
+	return os.MkdirAll(fullPath, 0755)
 }
 
 func (svc *Service) Rename(path, newPath string) (err error) {
-	oldPath := filepath.Join(svc.rootPath, path)
-	newFullPath := filepath.Join(svc.rootPath, newPath)
+	oldPath, err := utils.ResolvePathWithinRoot(svc.rootPath, path)
+	if err != nil {
+		return err
+	}
+	newFullPath, err := utils.ResolvePathWithinRoot(svc.rootPath, newPath)
+	if err != nil {
+		return err
+	}
 	return os.Rename(oldPath, newFullPath)
 }
 
 func (svc *Service) Delete(path string) (err error) {
-	fullPath := filepath.Join(svc.rootPath, path)
+	fullPath, err := utils.ResolvePathWithinRoot(svc.rootPath, path)
+	if err != nil {
+		return err
+	}
 	return os.RemoveAll(fullPath)
 }
 
 func (svc *Service) Copy(path, newPath string) (err error) {
-	srcPath := filepath.Join(svc.rootPath, path)
-	destPath := filepath.Join(svc.rootPath, newPath)
+	srcPath, err := utils.ResolvePathWithinRoot(svc.rootPath, path)
+	if err != nil {
+		return err
+	}
+	destPath, err := utils.ResolvePathWithinRoot(svc.rootPath, newPath)
+	if err != nil {
+		return err
+	}
 
 	// Get source info
 	srcInfo, err := os.Stat(srcPath)

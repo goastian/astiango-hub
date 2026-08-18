@@ -10,11 +10,14 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/goastian/astiango-hub/core/entity"
+	"github.com/goastian/astiango-hub/core/middlewares"
+	nodeconfig "github.com/goastian/astiango-hub/core/node/config"
 	"github.com/goastian/astiango-hub/core/utils"
 )
 
@@ -308,6 +311,10 @@ func (r *Runner) downloadFile(path string, filePath string, fileInfo *entity.FsF
 // getHttpRequestHeaders returns the headers for HTTP requests to the master node
 func (r *Runner) getHttpRequestHeaders() (headers map[string]string) {
 	headers = make(map[string]string)
-	headers["Authorization"] = utils.GetAuthKey()
+	cfg := nodeconfig.GetNodeConfigService()
+	headers["X-AstianGO-Node-Key"] = cfg.GetNodeKey()
+	headers["X-AstianGO-Node-Secret"] = cfg.GetAuthKey()
+	headers["X-AstianGO-Timestamp"] = strconv.FormatInt(time.Now().Unix(), 10)
+	headers["X-AstianGO-Nonce"] = middlewares.NewSyncNonce()
 	return headers
 }

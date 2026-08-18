@@ -7,6 +7,7 @@ import (
 
 	"github.com/goastian/astiango-hub/core/constants"
 	"github.com/goastian/astiango-hub/core/errors"
+	"github.com/goastian/astiango-hub/core/grpc/middlewares"
 	"github.com/goastian/astiango-hub/core/interfaces"
 	"github.com/goastian/astiango-hub/core/models/models"
 	"github.com/goastian/astiango-hub/core/models/service"
@@ -18,6 +19,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"google.golang.org/grpc/metadata"
 )
 
 var nodeServiceMutex = sync.Mutex{}
@@ -34,16 +36,32 @@ type NodeServiceServer struct {
 }
 
 // Register from handler/worker to master
-func (svr NodeServiceServer) Register(_ context.Context, req *grpc.NodeServiceRegisterRequest) (res *grpc.Response, err error) {
+func (svr NodeServiceServer) Register(ctx context.Context, req *grpc.NodeServiceRegisterRequest) (res *grpc.Response, err error) {
 	// node key
 	if req.NodeKey == "" {
 		return HandleError(errors.ErrorModelMissingRequiredData)
 	}
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok || len(md.Get(middlewares.GrpcHeaderNodeKey)) != 1 || len(md.Get(middlewares.GrpcHeaderNodeSecret)) != 1 || md.Get(middlewares.GrpcHeaderNodeKey)[0] != req.NodeKey {
+		return HandleError(errors.ErrorGrpcUnauthorized)
+	}
+	syncSecret := md.Get(middlewares.GrpcHeaderNodeSecret)[0]
 
 	// find in db
 	var node *models.Node
 	node, err = service.NewModelService[models.Node]().GetOne(bson.M{"key": req.NodeKey}, nil)
 	if err == nil {
+		if node.SyncKeyHash != "" {
+			valid, _, verifyErr := utils.VerifyPassword(syncSecret, node.SyncKeyHash)
+			if verifyErr != nil || !valid {
+				return HandleError(errors.ErrorGrpcUnauthorized)
+			}
+		} else {
+			node.SyncKeyHash, err = utils.HashPassword(syncSecret)
+			if err != nil {
+				return HandleError(err)
+			}
+		}
 		// register existing
 		node.Status = constants.NodeStatusOnline
 		node.Active = true
@@ -63,6 +81,10 @@ func (svr NodeServiceServer) Register(_ context.Context, req *grpc.NodeServiceRe
 			ActiveAt:   time.Now(),
 			Enabled:    true,
 			MaxRunners: int(req.MaxRunners),
+		}
+		node.SyncKeyHash, err = utils.HashPassword(syncSecret)
+		if err != nil {
+			return HandleError(err)
 		}
 		node.SetCreated(primitive.NilObjectID)
 		node.SetUpdated(primitive.NilObjectID)

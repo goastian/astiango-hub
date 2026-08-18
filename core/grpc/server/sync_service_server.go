@@ -1,14 +1,23 @@
 package server
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
+	"github.com/goastian/astiango-hub/core/grpc/middlewares"
+	authmiddlewares "github.com/goastian/astiango-hub/core/middlewares"
+	"github.com/goastian/astiango-hub/core/models/models"
+	"github.com/goastian/astiango-hub/core/models/service"
 	"github.com/goastian/astiango-hub/core/utils"
 	grpc2 "github.com/goastian/astiango-hub/grpc"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"google.golang.org/grpc/metadata"
 )
 
 type SyncServiceServer struct {
@@ -53,6 +62,9 @@ func (s *SyncServiceServer) StreamFileScan(
 	req *grpc2.FileSyncRequest,
 	stream grpc2.SyncService_StreamFileScanServer,
 ) error {
+	if err := authorizeSyncNode(stream.Context(), req.NodeKey, req.SpiderId); err != nil {
+		return err
+	}
 	cacheKey := req.SpiderId + ":" + req.Path
 
 	s.Debugf("file scan request from node %s for spider %s, path %s", req.NodeKey, req.SpiderId, req.Path)
@@ -81,8 +93,14 @@ func (s *SyncServiceServer) StreamFileScan(
 
 // performScan does the actual directory scan
 func (s *SyncServiceServer) performScan(req *grpc2.FileSyncRequest) (*cachedScanResult, error) {
-	workspacePath := utils.GetWorkspace()
-	dirPath := filepath.Join(workspacePath, req.SpiderId, req.Path)
+	syncRoot, err := utils.ResolvePathWithinRoot(utils.GetWorkspace(), req.SpiderId)
+	if err != nil {
+		return nil, err
+	}
+	dirPath, err := utils.ResolvePathWithinRoot(syncRoot, req.Path)
+	if err != nil {
+		return nil, err
+	}
 
 	s.Infof("performing directory scan for %s", dirPath)
 
@@ -149,6 +167,46 @@ func (s *SyncServiceServer) streamCachedResult(
 	}
 
 	return nil
+}
+
+func authorizeSyncNode(ctx context.Context, nodeKey, resourceID string) error {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok || len(md.Get(middlewares.GrpcHeaderNodeKey)) != 1 || len(md.Get(middlewares.GrpcHeaderNodeSecret)) != 1 || md.Get(middlewares.GrpcHeaderNodeKey)[0] != nodeKey {
+		return errors.New("invalid sync node identity")
+	}
+	stamp, err := strconv.ParseInt(firstMetadata(md, middlewares.GrpcHeaderTimestamp), 10, 64)
+	if err != nil || time.Since(time.Unix(stamp, 0)).Abs() > 2*time.Minute || !authmiddlewares.ConsumeSyncNonce(nodeKey, firstMetadata(md, middlewares.GrpcHeaderNonce)) {
+		return errors.New("stale or replayed sync request")
+	}
+	node, err := service.NewModelService[models.Node]().GetOne(bson.M{"key": nodeKey, "enabled": true, "active": true}, nil)
+	if err != nil {
+		return errors.New("unknown sync node")
+	}
+	valid, _, err := utils.VerifyPassword(md.Get(middlewares.GrpcHeaderNodeSecret)[0], node.SyncKeyHash)
+	if err != nil || !valid {
+		return errors.New("invalid sync node credential")
+	}
+	id, err := primitive.ObjectIDFromHex(resourceID)
+	if err != nil {
+		return errors.New("invalid sync resource")
+	}
+	spider, err := service.NewModelService[models.Spider]().GetOne(bson.M{"$or": []bson.M{{"_id": id}, {"git_id": id}}}, nil)
+	if err != nil {
+		return errors.New("unknown sync resource")
+	}
+	_, err = service.NewModelService[models.Task]().GetOne(bson.M{"node_id": node.Id, "spider_id": spider.Id, "status": bson.M{"$in": []string{"assigned", "running"}}}, nil)
+	if err != nil {
+		return errors.New("sync node is not authorized for this resource")
+	}
+	return nil
+}
+
+func firstMetadata(md metadata.MD, key string) string {
+	values := md.Get(key)
+	if len(values) != 1 {
+		return ""
+	}
+	return values[0]
 }
 
 // getOrWaitForScan implements request deduplication
@@ -223,8 +281,17 @@ func (s *SyncServiceServer) StreamFileDownload(
 	req *grpc2.FileDownloadRequest,
 	stream grpc2.SyncService_StreamFileDownloadServer,
 ) error {
-	workspacePath := utils.GetWorkspace()
-	filePath := filepath.Join(workspacePath, req.SpiderId, req.Path)
+	if err := authorizeSyncNode(stream.Context(), req.NodeKey, req.SpiderId); err != nil {
+		return err
+	}
+	syncRoot, err := utils.ResolvePathWithinRoot(utils.GetWorkspace(), req.SpiderId)
+	if err != nil {
+		return err
+	}
+	filePath, err := utils.ResolvePathWithinRoot(syncRoot, req.Path)
+	if err != nil {
+		return err
+	}
 
 	s.Infof("streaming file download: %s", filePath)
 

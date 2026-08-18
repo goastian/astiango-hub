@@ -1,11 +1,21 @@
 package utils
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"strings"
 
 	"github.com/spf13/viper"
 )
+
+func NewSecret() (string, error) {
+	value := make([]byte, 32)
+	if _, err := rand.Read(value); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(value), nil
+}
 
 const minimumAuthKeyLength = 32
 

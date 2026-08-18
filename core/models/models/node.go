@@ -20,6 +20,7 @@ type Node struct {
 	ActiveAt       time.Time `json:"active_at" bson:"active_ts" description:"Active at"`
 	CurrentRunners int       `json:"current_runners" bson:"current_runners" description:"Current runners"`
 	MaxRunners     int       `json:"max_runners" bson:"max_runners" description:"Max runners"`
+	SyncKeyHash    string    `json:"-" bson:"sync_key_hash,omitempty"`
 }
 
 type NodeDTO struct {
