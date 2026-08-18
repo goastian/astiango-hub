@@ -44,21 +44,52 @@ npm run build
 
 ```bash
 # Start the MCP server
-mcp-server-astiango-hub <astiango_hub_url> [api_token]
+mcp-server-astiango-hub <astiango_hub_url>
 
 # Examples:
 mcp-server-astiango-hub http://localhost:8080
-mcp-server-astiango-hub https://astiango-hub.example.com your-api-token
 ```
 
 ### Environment Variables
 
-You can also set the API token via environment variable:
+The token is required and must be supplied in a private mounted secret file. Do
+not pass it as a command argument or `ASTIANGO_API_TOKEN`; both are commonly
+exposed in process listings, shell history, or diagnostic output. `stdin` is
+reserved for the MCP protocol, so it cannot safely carry a credential.
 
 ```bash
-export ASTIANGO_API_TOKEN=your-api-token
-mcp-server-astiango-hub http://localhost:8080
+install -m 600 /dev/null /run/secrets/astiango_api_token
+# Write the token through your secret manager, not interactively into shell history.
+export ASTIANGO_API_TOKEN_FILE=/run/secrets/astiango_api_token
+export ASTIANGO_API_ENDPOINT=https://astiango-hub.example.com/api
+mcp-server-astiango-hub
 ```
+
+`ASTIANGO_MCP_ALLOW_MUTATIONS` defaults to `false`. This exposes MCP in
+read-only mode and blocks every non-GET/HEAD/OPTIONS request in the client.
+Set it to `true` only for a dedicated, minimally scoped API token when write
+access is required. The server never logs token material.
+
+Every deletion, task cancellation, or disable action additionally requires an
+operation-specific `confirmation` value, for example `DELETE:spider-123` or
+`CANCEL:task-123`.
+
+### Docker
+
+Build a local MCP image and mount the secret read-only at runtime:
+
+```bash
+docker build -t goastian/astiango-hub-mcp:sec-013 ./mcp
+docker run --rm -i --read-only --cap-drop=ALL --security-opt no-new-privileges \\
+  -e ASTIANGO_API_ENDPOINT=https://astiango-hub.example.com/api \\
+  -e ASTIANGO_API_TOKEN_FILE=/run/secrets/astiango_api_token \\
+  -v /secure/path/astiango_api_token:/run/secrets/astiango_api_token:ro \\
+  goastian/astiango-hub-mcp:sec-013
+```
+
+Use a token whose server-side permissions are limited to the resources and
+verbs the MCP process needs. The MCP read-only default is a second boundary,
+not a substitute for API authorization.
 
 ### With MCP Inspector
 
@@ -177,7 +208,7 @@ Ensure your AstianGO Hub instance is accessible and optionally configure API aut
 
 1. Make sure AstianGO Hub is running and accessible at the specified URL
 2. If using authentication, obtain an API token from your AstianGO Hub instance
-3. Configure the token via command line argument or environment variable
+3. Mount the token as a private file and configure `ASTIANGO_API_TOKEN_FILE`
 
 ### MCP Client Configuration
 

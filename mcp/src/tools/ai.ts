@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AstianGoHubClient } from "../client.js";
+import { requireDestructiveConfirmation } from '../security.js';
 import { z } from "zod";
 
 const AI_TOOLS = {
@@ -191,9 +192,11 @@ export function configureAITools(server: McpServer, client: AstianGoHubClient) {
     "Delete an LLM provider configuration",
     {
       id: z.string().describe("ID of the LLM provider to delete"),
+      confirmation: z.string().describe('Required: DELETE:<id>'),
     },
-    async ({ id }) => {
+    async ({ id, confirmation }) => {
       try {
+        requireDestructiveConfirmation(confirmation, 'DELETE', id);
         await client.deleteLLMProvider(id);
         return {
           content: [

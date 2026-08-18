@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AstianGoHubClient } from "../client.js";
+import { requireDestructiveConfirmation } from '../security.js';
 import { z } from "zod";
 
 const DATABASE_TOOLS = {
@@ -181,9 +182,11 @@ export function configureDatabaseTools(server: McpServer, client: AstianGoHubCli
     "Delete a database connection",
     {
       database_id: z.string().describe("The ID of the database to delete"),
+      confirmation: z.string().describe('Required: DELETE:<database_id>'),
     },
-    async ({ database_id }) => {
+    async ({ database_id, confirmation }) => {
       try {
+        requireDestructiveConfirmation(confirmation, 'DELETE', database_id);
         await client.deleteDatabase(database_id);
         return {
           content: [

@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AstianGoHubClient } from "../client.js";
+import { requireDestructiveConfirmation } from '../security.js';
 import { z } from "zod";
 
 const SPIDER_TOOLS = {
@@ -204,9 +205,11 @@ export function configureSpiderTools(server: McpServer, client: AstianGoHubClien
     "Delete a spider",
     {
       spider_id: z.string().describe("The ID of the spider to delete"),
+      confirmation: z.string().describe('Required: DELETE:<spider_id>'),
     },
-    async ({ spider_id }) => {
+    async ({ spider_id, confirmation }) => {
       try {
+        requireDestructiveConfirmation(confirmation, 'DELETE', spider_id);
         await client.deleteSpider(spider_id);
         return {
           content: [

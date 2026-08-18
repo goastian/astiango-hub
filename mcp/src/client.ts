@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
+import { isReadOnlyMethod } from './security.js';
 
 export interface AstianGoHubConfig {
   url: string;
@@ -185,13 +186,13 @@ export class AstianGoHubClient {
   private client: AxiosInstance;
   private baseURL: string;
 
-  constructor(apiUrl: string, apiToken?: string, timeout: number = 30000) {
+  constructor(
+    apiUrl: string,
+    apiToken?: string,
+    timeout: number = 30000,
+    allowMutations: boolean = false
+  ) {
     this.baseURL = apiUrl.replace(/\/$/, ''); // Remove trailing slash
-
-    // Warn if no API token is provided
-    if (!apiToken) {
-      console.error('ℹ️  INFO: No API token provided - some endpoints may require authentication');
-    }
 
     this.client = axios.create({
       baseURL: this.baseURL,
@@ -200,6 +201,15 @@ export class AstianGoHubClient {
         'Content-Type': 'application/json',
         ...(apiToken && { Authorization: `Bearer ${apiToken}` }),
       },
+    });
+
+    this.client.interceptors.request.use(config => {
+      if (!allowMutations && !isReadOnlyMethod(config.method)) {
+        return Promise.reject(
+          new Error('MCP is read-only. Set ASTIANGO_MCP_ALLOW_MUTATIONS=true to allow write operations.')
+        );
+      }
+      return config;
     });
 
     // Add response interceptor for error handling

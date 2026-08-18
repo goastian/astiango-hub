@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AstianGoHubClient } from "../client.js";
+import { requireDestructiveConfirmation } from '../security.js';
 import { z } from "zod";
 
 const PROJECT_TOOLS = {
@@ -152,9 +153,11 @@ export function configureProjectTools(server: McpServer, client: AstianGoHubClie
     "Delete a project",
     {
       project_id: z.string().describe("The ID of the project to delete"),
+      confirmation: z.string().describe('Required: DELETE:<project_id>'),
     },
-    async ({ project_id }) => {
+    async ({ project_id, confirmation }) => {
       try {
+        requireDestructiveConfirmation(confirmation, 'DELETE', project_id);
         await client.deleteProject(project_id);
         return {
           content: [

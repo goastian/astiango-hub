@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AstianGoHubClient } from "../client.js";
+import { requireDestructiveConfirmation } from '../security.js';
 import { z } from "zod";
 
 const TASK_TOOLS = {
@@ -83,9 +84,11 @@ export function configureTaskTools(server: McpServer, client: AstianGoHubClient)
     "Cancel a running task",
     {
       task_id: z.string().describe("The ID of the task to cancel"),
+      confirmation: z.string().describe('Required: CANCEL:<task_id>'),
     },
-    async ({ task_id }) => {
+    async ({ task_id, confirmation }) => {
       try {
+        requireDestructiveConfirmation(confirmation, 'CANCEL', task_id);
         await client.cancelTask(task_id);
         return {
           content: [
@@ -145,9 +148,11 @@ export function configureTaskTools(server: McpServer, client: AstianGoHubClient)
     "Delete a task",
     {
       task_id: z.string().describe("The ID of the task to delete"),
+      confirmation: z.string().describe('Required: DELETE:<task_id>'),
     },
-    async ({ task_id }) => {
+    async ({ task_id, confirmation }) => {
       try {
+        requireDestructiveConfirmation(confirmation, 'DELETE', task_id);
         await client.deleteTask(task_id);
         return {
           content: [

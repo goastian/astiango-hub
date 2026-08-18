@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AstianGoHubClient } from "../client.js";
+import { requireDestructiveConfirmation } from '../security.js';
 import { z } from "zod";
 
 const SCHEDULE_TOOLS = {
@@ -186,9 +187,11 @@ export function configureScheduleTools(server: McpServer, client: AstianGoHubCli
     "Delete a schedule",
     {
       schedule_id: z.string().describe("The ID of the schedule to delete"),
+      confirmation: z.string().describe('Required: DELETE:<schedule_id>'),
     },
-    async ({ schedule_id }) => {
+    async ({ schedule_id, confirmation }) => {
       try {
+        requireDestructiveConfirmation(confirmation, 'DELETE', schedule_id);
         await client.deleteSchedule(schedule_id);
         return {
           content: [
@@ -248,9 +251,11 @@ export function configureScheduleTools(server: McpServer, client: AstianGoHubCli
     "Disable a schedule",
     {
       schedule_id: z.string().describe("The ID of the schedule to disable"),
+      confirmation: z.string().describe('Required: DISABLE:<schedule_id>'),
     },
-    async ({ schedule_id }) => {
+    async ({ schedule_id, confirmation }) => {
       try {
+        requireDestructiveConfirmation(confirmation, 'DISABLE', schedule_id);
         await client.disableSchedule(schedule_id);
         return {
           content: [

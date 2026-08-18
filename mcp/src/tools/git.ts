@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AstianGoHubClient } from "../client.js";
+import { requireDestructiveConfirmation } from '../security.js';
 import { z } from "zod";
 
 const GIT_TOOLS = {
@@ -166,9 +167,11 @@ export function configureGitTools(server: McpServer, client: AstianGoHubClient) 
     "Delete a Git repository connection",
     {
       git_id: z.string().describe("The ID of the Git repository to delete"),
+      confirmation: z.string().describe('Required: DELETE:<git_id>'),
     },
-    async ({ git_id }) => {
+    async ({ git_id, confirmation }) => {
       try {
+        requireDestructiveConfirmation(confirmation, 'DELETE', git_id);
         await client.deleteGitRepo(git_id);
         return {
           content: [

@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AstianGoHubClient } from "../client";
+import { requireDestructiveConfirmation } from '../security.js';
 import { z } from "zod";
 
 const NODE_TOOLS = {
@@ -151,9 +152,11 @@ export function configureNodeTools(server: McpServer, client: AstianGoHubClient)
     "Disable a node",
     {
       node_id: z.string().describe("The ID of the node to disable"),
+      confirmation: z.string().describe('Required: DISABLE:<node_id>'),
     },
-    async ({ node_id }) => {
+    async ({ node_id, confirmation }) => {
       try {
+        requireDestructiveConfirmation(confirmation, 'DISABLE', node_id);
         await client.disableNode(node_id);
         return {
           content: [
