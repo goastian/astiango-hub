@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import markdownit from 'markdown-it';
 import { translate } from '@/utils';
+import { sanitizeHtml } from '@/utils/sanitize';
 
 // i18n
 const t = translate;
@@ -14,7 +15,7 @@ const title = computed<string>(() => t('views.misc.disclaimer.title'));
 
 // content
 const content = computed<string>(() => {
-  return md.render(t('views.misc.disclaimer.content'));
+  return sanitizeHtml(md.render(t('views.misc.disclaimer.content')));
 });
 defineOptions({ name: 'ClDisclaimer' });
 </script>
@@ -26,7 +27,7 @@ defineOptions({ name: 'ClDisclaimer' });
         <h1 class="title">
           {{ title }}
         </h1>
-        <div class="content" v-html="content" />
+        <div class="content" v-safe-html="content" />
       </div>
     </div>
   </cl-simple-layout>

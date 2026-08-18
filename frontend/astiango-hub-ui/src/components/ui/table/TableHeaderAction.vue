@@ -37,7 +37,7 @@ defineOptions({ name: 'ClTableHeaderAction' });
   <span :class="classes" class="action" @click="onClick">
     <el-tooltip :content="tooltip">
       <template v-if="isHtml" #content>
-        <div v-html="tooltip" />
+        <div v-safe-html="tooltip" />
       </template>
       <div>
         <cl-icon :icon="icon" />

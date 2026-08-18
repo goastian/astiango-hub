@@ -6,6 +6,7 @@ import { computed, ref, watch } from 'vue';
 import 'highlight.js/styles/github.css';
 import ClChatMessageAction from '@/components/ui/chat/ChatMessageAction.vue';
 import { Document } from '@element-plus/icons-vue';
+import { sanitizeHtml } from '@/utils/sanitize';
 
 const { t } = useI18n();
 
@@ -14,7 +15,7 @@ const props = defineProps<{
 }>();
 
 const md = markdownit({
-  html: true,
+  html: false,
   linkify: true,
   typographer: true,
   highlight: function (str, lang) {
@@ -49,7 +50,7 @@ const formatTime = (date: Date | undefined): string => {
 // Safe markdown rendering with sanitization
 const renderMarkdown = (content: string): string => {
   if (!content) return '';
-  return md.render(content);
+  return sanitizeHtml(md.render(content));
 };
 
 const typing = ref(true);
@@ -89,7 +90,7 @@ defineOptions({ name: 'ClChatMessage' });
   <div :class="['message-container', message.role]">
     <div class="message-content">
       <template v-if="message.content">
-        <div v-html="renderMarkdown(message.content)"></div>
+        <div v-safe-html="renderMarkdown(message.content)"></div>
       </template>
 
       <!-- Iterate through content items in order -->
@@ -108,11 +109,11 @@ defineOptions({ name: 'ClChatMessage' });
           <!-- Text content -->
           <div v-else-if="content.type === 'text'" class="text-content">
             <template v-if="content.isStreaming">
-              <div v-html="renderMarkdown(content.content || '')"></div>
+              <div v-safe-html="renderMarkdown(content.content || '')"></div>
               <span class="typing-indicator" v-if="typing">|</span>
             </template>
             <template v-else>
-              <div v-html="renderMarkdown(content.content || '')"></div>
+              <div v-safe-html="renderMarkdown(content.content || '')"></div>
             </template>
           </div>
         </template>

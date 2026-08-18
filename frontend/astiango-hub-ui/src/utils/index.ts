@@ -31,3 +31,4 @@ export * from './icon';
 export * from './dependency';
 export * from './base64';
 export * from './autoprobe';
+export * from './sanitize';

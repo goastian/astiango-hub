@@ -11,6 +11,7 @@ import {
 import { formatTimeAgo, translate } from '@/utils';
 import { useStore } from 'vuex';
 import dayjs from 'dayjs';
+import { sanitizeUrl } from '@/utils/sanitize';
 
 const props = withDefaults(
   defineProps<{
@@ -85,29 +86,29 @@ defineOptions({ name: 'ClResultCell' });
   <el-tooltip>
     <!--tooltip-->
     <template #content>
-      <div v-html="tooltip" />
+      <div v-safe-html="tooltip" />
     </template>
     <!--./tooltip-->
 
     <!--content-->
     <div class="result-cell" :class="cls" @click="onClick">
       <template v-if="type === DATA_FIELD_TYPE_IMAGE">
-        <a class="result-cell-image" :href="value?.toString()" target="_blank">
-          <img :src="value?.toString()" :alt="value?.toString()" />
+        <a class="result-cell-image" :href="sanitizeUrl(value)" target="_blank" rel="noopener noreferrer">
+          <img :src="sanitizeUrl(value)" :alt="value?.toString()" />
         </a>
       </template>
 
       <template v-else-if="type === DATA_FIELD_TYPE_URL">
         <div class="result-cell-url">
           <font-awesome-icon class="icon" :icon="['fa', 'link']" />
-          <a :href="value?.toString()" target="_blank">
+          <a :href="sanitizeUrl(value)" target="_blank" rel="noopener noreferrer">
             {{ value }}
           </a>
         </div>
       </template>
 
       <template v-else-if="type === DATA_FIELD_TYPE_HTML">
-        <div v-html="value" />
+        <div v-safe-html="value" />
       </template>
 
       <template v-else-if="type === DATA_FIELD_TYPE_LONG_TEXT">

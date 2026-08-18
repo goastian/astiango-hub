@@ -39,6 +39,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	go.mongodb.org/mongo-driver v1.17.3
 	golang.org/x/oauth2 v0.28.0
+	golang.org/x/net v0.39.0
 	golang.org/x/text v0.24.0
 	google.golang.org/api v0.226.0
 	google.golang.org/grpc v1.71.0
@@ -129,7 +130,6 @@ require (
 	golang.org/x/arch v0.15.0 // indirect
 	golang.org/x/crypto v0.37.0 // indirect
 	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67 // indirect
-	golang.org/x/net v0.39.0 // indirect
 	golang.org/x/sync v0.13.0 // indirect
 	golang.org/x/sys v0.32.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250303144028-a0af3efb3deb // indirect

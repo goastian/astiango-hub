@@ -99,7 +99,7 @@ defineOptions({ name: 'ClSpiderStat' });
       @click="() => $emit('duration-click')"
     >
       <template #tooltip>
-        <div v-html="tooltips.duration" />
+        <div v-safe-html="tooltips.duration" />
       </template>
     </cl-tag>
   </div>

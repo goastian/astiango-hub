@@ -19,7 +19,6 @@ defineOptions({ name: 'ClAtomMaterialIcon' });
 </script>
 
 <template>
-  <span class="atom-material-icon" v-html="html" />
+  <span class="atom-material-icon" v-safe-html.svg="html" />
 </template>
-
 

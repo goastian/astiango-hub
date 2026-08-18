@@ -17,6 +17,7 @@ import (
 	"github.com/gomarkdown/markdown"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"golang.org/x/net/html"
 )
 
 type Service struct {
@@ -495,7 +496,84 @@ func (svc *Service) getFormattedMetricValue(metricName string, m *models.Metric)
 }
 
 func (svc *Service) convertMarkdownToHtml(content string) (html string) {
-	return string(markdown.ToHTML([]byte(content), nil, nil))
+	return sanitizeNotificationHTML(string(markdown.ToHTML([]byte(content), nil, nil)))
+}
+
+var allowedNotificationHTMLTags = map[string]bool{
+	"a": true, "b": true, "blockquote": true, "br": true, "code": true, "del": true,
+	"em": true, "h1": true, "h2": true, "h3": true, "h4": true, "h5": true, "h6": true,
+	"hr": true, "li": true, "ol": true, "p": true, "pre": true, "strong": true, "ul": true,
+}
+
+var blockedNotificationHTMLTags = map[string]bool{
+	"button": true, "embed": true, "form": true, "iframe": true, "input": true, "math": true,
+	"object": true, "script": true, "style": true, "svg": true,
+}
+
+func sanitizeNotificationHTML(content string) string {
+	document, err := html.Parse(strings.NewReader(content))
+	if err != nil {
+		return ""
+	}
+	sanitizeNotificationHTMLNode(document)
+
+	var output strings.Builder
+	for child := document.FirstChild; child != nil; child = child.NextSibling {
+		if child.Type == html.DoctypeNode {
+			continue
+		}
+		if err := html.Render(&output, child); err != nil {
+			return ""
+		}
+	}
+	return output.String()
+}
+
+func sanitizeNotificationHTMLNode(parent *html.Node) {
+	for child := parent.FirstChild; child != nil; {
+		next := child.NextSibling
+		if child.Type == html.ElementNode {
+			if blockedNotificationHTMLTags[child.Data] {
+				parent.RemoveChild(child)
+			} else if !allowedNotificationHTMLTags[child.Data] {
+				sanitizeNotificationHTMLNode(child)
+				for grandchild := child.FirstChild; grandchild != nil; {
+					nextGrandchild := grandchild.NextSibling
+					child.RemoveChild(grandchild)
+					parent.InsertBefore(grandchild, child)
+					grandchild = nextGrandchild
+				}
+				parent.RemoveChild(child)
+			} else {
+				sanitizeNotificationHTMLAttributes(child)
+				sanitizeNotificationHTMLNode(child)
+			}
+		} else {
+			sanitizeNotificationHTMLNode(child)
+		}
+		child = next
+	}
+}
+
+func sanitizeNotificationHTMLAttributes(node *html.Node) {
+	if node.Data != "a" {
+		node.Attr = nil
+		return
+	}
+
+	attributes := make([]html.Attribute, 0, 1)
+	for _, attribute := range node.Attr {
+		if attribute.Key != "href" || !isSafeNotificationURL(attribute.Val) {
+			continue
+		}
+		attributes = append(attributes, html.Attribute{Key: "href", Val: attribute.Val})
+	}
+	node.Attr = attributes
+}
+
+func isSafeNotificationURL(value string) bool {
+	url := strings.TrimSpace(strings.ToLower(value))
+	return strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "mailto:")
 }
 
 func (svc *Service) SendNodeNotification(node *models.Node) {

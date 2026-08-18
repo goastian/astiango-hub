@@ -73,9 +73,8 @@ defineOptions({ name: 'ClTaskCommand' });
     @click="$emit('click')"
   >
     <template #tooltip>
-      <div class="tooltip" v-html="data.tooltip" />
+      <div class="tooltip" v-safe-html="data.tooltip" />
     </template>
   </cl-tag>
 </template>
-
 

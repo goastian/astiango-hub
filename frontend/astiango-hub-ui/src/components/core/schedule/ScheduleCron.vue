@@ -107,7 +107,7 @@ defineOptions({ name: 'ClScheduleCron' });
     @click="$emit('click')"
   >
     <template #tooltip>
-      <div v-html="data.tooltip" />
+      <div v-safe-html="data.tooltip" />
     </template>
   </cl-tag>
   <div v-else :class="[isValid ? 'valid' : 'invalid']" class="schedule-cron">

@@ -72,7 +72,7 @@ defineOptions({ name: 'ClIcon' });
       />
     </template>
     <template v-else-if="isSvg">
-      <div :class="[icon, ...cls]" class="icon" v-html="iconSvgSrc"/>
+      <div :class="[icon, ...cls]" class="icon" v-safe-html.svg="iconSvgSrc"/>
     </template>
     <template v-else>
       <i

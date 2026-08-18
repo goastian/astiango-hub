@@ -2,7 +2,6 @@
 import { computed } from 'vue';
 import { useStore } from 'vuex';
 import { translate } from '@/utils';
-import { getDataFieldIconClassNameByType } from '@/utils/dataFields';
 
 const t = translate;
 
@@ -16,8 +15,7 @@ const dialogType = computed<DataFieldType>(() => state.resultDialogType);
 const dialogKey = computed<string>(() => state.resultDialogKey);
 
 const dialogTitle = computed(() => {
-  const icon = getDataFieldIconClassNameByType(dialogType.value);
-  return `<i class="${icon}" style="margin-right: 5px"></i>${dialogKey.value} (${t('components.result.types.' + dialogType.value)})`;
+  return `${dialogKey.value} (${t('components.result.types.' + dialogType.value)})`;
 });
 
 const onClose = () => {
@@ -31,7 +29,7 @@ defineOptions({ name: 'ClResultCellDialog' });
 
 <template>
   <cl-dialog :visible="dialogVisible" :title="dialogTitle" @close="onClose">
-    <p class="result-dialog-content" v-html="dialogContent" />
+    <p class="result-dialog-content" v-safe-html="dialogContent" />
   </cl-dialog>
 </template>
 

@@ -5,12 +5,10 @@ import { installer as AstianGoHubUI } from '@/package/index';
 import AppComp from './App.vue';
 import { getStore } from '@/store';
 import { getI18n } from '@/i18n';
-import { initBaiduTonji } from '@/admin/baidu';
 import { getRouter } from '@/router';
 import { initRequest } from '@/services/request';
 import { setGlobalLang } from '@/utils/i18n';
-import { auth, export_ } from '@/directives';
-import { initClarity } from '@/admin/clarity';
+import { auth, safeHtml } from '@/directives';
 import 'normalize.css/normalize.css';
 import 'element-plus/theme-chalk/index.css';
 import '@/styles/index.css';
@@ -20,8 +18,6 @@ import clickOutsideDirective from '@/directives/click-outside/clickOutside';
 
 export const getDefaultCreateAppOptions = (): CreateAppOptions => {
   return {
-    initBaiduTongji: true,
-    initClarity: false,
     store: undefined,
     rootRoutes: undefined,
     routes: undefined,
@@ -44,12 +40,6 @@ const _createApp = async (options?: CreateAppOptions): Promise<App> => {
 
   // normalize options
   options = normalizeOptions(options);
-
-  // baidu tongji
-  if (options.initBaiduTongji) initBaiduTonji();
-
-  // clarity
-  if (options.initClarity) initClarity();
 
   // remove loading placeholder
   document.querySelector('#loading-placeholder')?.remove();
@@ -87,6 +77,7 @@ const _createApp = async (options?: CreateAppOptions): Promise<App> => {
   app.component('font-awesome-icon', FontAwesomeIcon);
   app.directive('auth', auth as any);
   app.directive('click-outside', clickOutsideDirective);
+  app.directive('safe-html', safeHtml);
 
   // mount
   app.mount(typeof options.mount === 'string' ? options.mount : '#app');
