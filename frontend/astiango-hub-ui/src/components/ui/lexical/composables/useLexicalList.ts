@@ -4,9 +4,9 @@ import {
   $handleListInsertParagraph,
   INSERT_ORDERED_LIST_COMMAND,
   INSERT_UNORDERED_LIST_COMMAND,
-  insertList,
+  $insertList,
   REMOVE_LIST_COMMAND,
-  removeList,
+  $removeList,
 } from '@lexical/list';
 import { mergeRegister } from '@lexical/utils';
 import useMounted from './useLexicalMounted';
@@ -17,7 +17,7 @@ export default (editor: LexicalEditor) => {
       editor.registerCommand(
         INSERT_ORDERED_LIST_COMMAND,
         () => {
-          insertList(editor, 'number');
+          $insertList('number');
           return true;
         },
         COMMAND_PRIORITY_LOW
@@ -25,7 +25,7 @@ export default (editor: LexicalEditor) => {
       editor.registerCommand(
         INSERT_UNORDERED_LIST_COMMAND,
         () => {
-          insertList(editor, 'bullet');
+          $insertList('bullet');
           return true;
         },
         COMMAND_PRIORITY_LOW
@@ -33,7 +33,7 @@ export default (editor: LexicalEditor) => {
       editor.registerCommand(
         REMOVE_LIST_COMMAND,
         () => {
-          removeList(editor);
+          $removeList();
           return true;
         },
         COMMAND_PRIORITY_LOW
